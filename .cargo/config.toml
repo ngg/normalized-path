@@ -1,0 +1,14 @@
+[target.'cfg(target_arch = "wasm32")']
+rustflags = ["-C", "target-feature=+atomics,+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+exception-handling,+extended-const,+multivalue,+mutable-globals,+nontrapping-fptoint,+reference-types,+sign-ext,+simd128,+tail-call"]
+
+[target.wasm32-unknown-unknown]
+runner = "wasm-bindgen-test-runner"
+
+[target.wasm32-wasip1]
+runner = "wasmtime"
+
+[target.wasm32-wasip1-threads]
+runner = ["wasmtime", "-W", "threads=y", "-W", "shared-memory=y", "-S", "threads=y"]
+
+[target.wasm32-wasip2]
+runner = "wasmtime"

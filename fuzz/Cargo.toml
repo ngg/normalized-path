@@ -1,0 +1,23 @@
+[package]
+name = "normalized-path-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "Apache-2.0 OR MIT"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+icu_casemap = { version = "~2.1.0", default-features = false, features = ["compiled_data"] }
+icu_locale_core = "~2.1.0"
+libfuzzer-sys = "0.4.0"
+
+normalized-path = { path = "..", features = ["__test"] }
+
+[[bin]]
+name = "fuzz_path_element"
+path = "fuzz_targets/fuzz_path_element.rs"
+test = false
+doc = false
+bench = false
