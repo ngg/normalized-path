@@ -1258,12 +1258,28 @@ mod tests {
         }
 
         // Borrowed input, but NFC normalization produces owned output.
+        // On Apple, the os-compatible form is NFD, which matches the NFD input, so it borrows.
         #[test]
         fn into_os_str_owned_when_nfc_transforms() {
             let input = OsStr::new("e\u{0301}.txt"); // NFD
             let pe = PathElementCS::from_os_str(input).unwrap();
             let result = pe.into_os_str();
+            #[cfg(target_vendor = "apple")]
+            assert!(matches!(result, Cow::Borrowed(_)));
+            #[cfg(not(target_vendor = "apple"))]
             assert!(matches!(result, Cow::Owned(_)));
+        }
+
+        // NFC input borrows on non-Apple (os-compatible is NFC), owned on Apple (os-compatible is NFD).
+        #[test]
+        fn into_os_str_owned_when_nfd_transforms() {
+            let input = OsStr::new("\u{00E9}.txt"); // NFC
+            let pe = PathElementCS::from_os_str(input).unwrap();
+            let result = pe.into_os_str();
+            #[cfg(target_vendor = "apple")]
+            assert!(matches!(result, Cow::Owned(_)));
+            #[cfg(not(target_vendor = "apple"))]
+            assert!(matches!(result, Cow::Borrowed(_)));
         }
 
         #[test]

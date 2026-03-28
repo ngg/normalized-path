@@ -66,8 +66,8 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - run: cargo install -f wasm-bindgen-cli --version $(cargo pkgid wasm-bindgen | cut -d"@" -f2)
       - run: cargo build --target wasm32-unknown-unknown
+      - run: cargo install -f wasm-bindgen-cli --version $(cargo pkgid wasm-bindgen | cut -d"@" -f2)
       - run: cargo test --target wasm32-unknown-unknown
 
   wasm-wasip1:
@@ -78,6 +78,6 @@ jobs:
         with:
           targets: wasm32-wasip1
       - uses: Swatinem/rust-cache@v2
-      - run: cargo install wasmtime-cli
       - run: cargo build --target wasm32-wasip1
+      - run: cargo install wasmtime-cli
       - run: cargo test --target wasm32-wasip1
