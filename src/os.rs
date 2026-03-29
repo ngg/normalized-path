@@ -3,6 +3,8 @@ use alloc::borrow::Cow;
 use alloc::format;
 #[cfg(any(target_vendor = "apple", test, feature = "__test"))]
 use alloc::string::String;
+#[cfg(any(target_vendor = "apple", test, feature = "__test"))]
+use alloc::vec::Vec;
 
 #[cfg(target_vendor = "apple")]
 use crate::Error;
@@ -11,6 +13,8 @@ use crate::Result;
 use crate::unicode::case_fold;
 #[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
 use crate::unicode::nfd;
+#[cfg(any(target_vendor = "apple", test, feature = "__test"))]
+use crate::utils::SubstringOrOwned;
 #[cfg(any(
     target_os = "windows",
     target_vendor = "apple",
@@ -112,9 +116,7 @@ pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, [u8]> {
 /// Obtain the Darwin-native filesystem representation of a string via
 /// `CFStringGetFileSystemRepresentation`.
 #[cfg(target_vendor = "apple")]
-fn apple_file_system_representation(s: &str) -> Result<String> {
-    use core::ffi::CStr;
-
+fn apple_file_system_representation(s: &str) -> Result<Vec<u8>> {
     use objc2_core_foundation::CFString;
 
     let cf = CFString::from_str(s);
@@ -126,7 +128,7 @@ fn apple_file_system_representation(s: &str) -> Result<String> {
     if ok {
         let nul = buf.iter().position(|&b| b == 0).ok_or(Error::OSError)?;
         buf.truncate(nul);
-        String::from_utf8(buf).map_err(|_| Error::OSError)
+        Ok(buf)
     } else {
         Err(Error::OSError)
     }
@@ -135,15 +137,16 @@ fn apple_file_system_representation(s: &str) -> Result<String> {
 /// Portable fallback: NFD normalization + leading BOM removal.
 #[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
 #[allow(clippy::unnecessary_wraps)]
-fn apple_file_system_representation(s: &str) -> Result<String> {
-    Ok(nfd(s).trim_start_matches('\u{FEFF}').into())
+fn apple_file_system_representation(s: &str) -> Result<Vec<u8>> {
+    Ok(nfd(s).trim_start_matches('\u{FEFF}').as_bytes().to_vec())
 }
 
 /// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
 #[cfg(any(target_vendor = "apple", test, feature = "__test"))]
 pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
-    let result = apple_file_system_representation(s)?;
-    Ok(str_cow_to_bytes(cow(result.chars(), s)))
+    let bytes = apple_file_system_representation(s)?;
+    let soo = SubstringOrOwned::new(&bytes[..], s.as_bytes());
+    Ok(soo.into_cow(Cow::Borrowed(s.as_bytes())))
 }
 
 /// Apply the current OS's compatibility mapping.
