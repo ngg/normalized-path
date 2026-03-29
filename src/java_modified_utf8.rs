@@ -74,11 +74,30 @@ mod tests {
     use super::{java_modified_utf8, str_to_os_bytes};
     use crate::utils::decode_utf8_lossy;
 
-    #[cfg(all(feature = "std", any(test, feature = "__test")))]
-    use super::thread_override_java_modified_utf8;
+    #[test]
+    fn str_to_os_bytes_passthrough_when_disabled() {
+        assert!(!java_modified_utf8());
+        let result = str_to_os_bytes(Cow::Borrowed("hello"));
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.as_ref(), b"hello");
+    }
+
+    #[test]
+    fn str_to_os_bytes_roundtrip_when_disabled() {
+        let input = "file_😀.txt";
+        let os_bytes = str_to_os_bytes(Cow::Borrowed(input));
+        let decoded = decode_utf8_lossy(&os_bytes);
+        assert_eq!(&*decoded, input);
+    }
+
+    #[test]
+    fn str_to_os_bytes_supplementary_without_flag() {
+        let result = str_to_os_bytes(Cow::Borrowed("😀"));
+        assert_eq!(result.as_ref(), "😀".as_bytes());
+    }
 
     #[cfg(feature = "std")]
-    mod with_override {
+    mod std_tests {
         use alloc::borrow::Cow;
 
         #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
@@ -91,7 +110,7 @@ mod tests {
         use crate::utils::decode_utf8_lossy;
 
         #[test]
-        fn flag_default_is_false() {
+        fn flag_override_false() {
             let _guard = thread_override_java_modified_utf8(false);
             assert!(!java_modified_utf8());
         }
@@ -104,12 +123,22 @@ mod tests {
 
         #[test]
         fn flag_override_restores_on_drop() {
-            let _guard = thread_override_java_modified_utf8(false);
             {
-                let _inner = thread_override_java_modified_utf8(true);
+                let _guard = thread_override_java_modified_utf8(true);
                 assert!(java_modified_utf8());
             }
             assert!(!java_modified_utf8());
+        }
+
+        #[test]
+        fn flag_override_nested() {
+            let _outer = thread_override_java_modified_utf8(true);
+            assert!(java_modified_utf8());
+            {
+                let _inner = thread_override_java_modified_utf8(false);
+                assert!(!java_modified_utf8());
+            }
+            assert!(java_modified_utf8());
         }
 
         #[test]
@@ -117,13 +146,6 @@ mod tests {
             let _guard = thread_override_java_modified_utf8(true);
             let result = str_to_os_bytes(Cow::Borrowed("😀"));
             assert_eq!(result.as_ref(), &[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]);
-        }
-
-        #[test]
-        fn str_to_os_bytes_supplementary_without_flag() {
-            let _guard = thread_override_java_modified_utf8(false);
-            let result = str_to_os_bytes(Cow::Borrowed("😀"));
-            assert_eq!(result.as_ref(), "😀".as_bytes());
         }
 
         #[test]
@@ -164,22 +186,5 @@ mod tests {
             let result = str_to_os_bytes(Cow::Borrowed("hello"));
             assert!(matches!(result, Cow::Borrowed(_)));
         }
-    }
-
-    #[test]
-    fn str_to_os_bytes_passthrough_when_disabled() {
-        // Without override, the global default is false
-        assert!(!java_modified_utf8());
-        let result = str_to_os_bytes(Cow::Borrowed("hello"));
-        assert!(matches!(result, Cow::Borrowed(_)));
-        assert_eq!(result.as_ref(), b"hello");
-    }
-
-    #[test]
-    fn str_to_os_bytes_roundtrip_when_disabled() {
-        let input = "file_😀.txt";
-        let os_bytes = str_to_os_bytes(Cow::Borrowed(input));
-        let decoded = decode_utf8_lossy(&os_bytes);
-        assert_eq!(&*decoded, input);
     }
 }

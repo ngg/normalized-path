@@ -11,8 +11,7 @@ use crate::unicode::nfd;
 #[cfg(any(target_vendor = "apple", test, feature = "__test"))]
 use crate::utils::SubstringOrOwned;
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
-use crate::utils::cow;
-use crate::utils::str_cow_to_bytes;
+use crate::utils::{cow, str_cow_to_bytes};
 use alloc::borrow::Cow;
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
 use alloc::format;
