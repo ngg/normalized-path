@@ -66,9 +66,8 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
       - run: cargo build --target wasm32-unknown-unknown
-      - run: cargo binstall -y --force wasm-bindgen-cli@$(cargo pkgid wasm-bindgen | cut -d"@" -f2)
+      - run: cargo install -f wasm-bindgen-cli --version $(cargo pkgid wasm-bindgen | cut -d"@" -f2)
       - run: cargo test --target wasm32-unknown-unknown
 
   wasm32-wasip1:
@@ -79,9 +78,8 @@ jobs:
         with:
           targets: wasm32-wasip1
       - uses: Swatinem/rust-cache@v2
-      - run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
       - run: cargo build --target wasm32-wasip1
-      - run: cargo binstall -y wasmtime-cli
+      - run: cargo install wasmtime-cli
       - run: cargo test --target wasm32-wasip1
 
   fuzz:
@@ -97,8 +95,7 @@ jobs:
             fuzz/corpus
           key: fuzz-${{ github.sha }}
           restore-keys: fuzz-
-      - run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-      - run: cargo binstall -y cargo-fuzz
+      - run: cargo install cargo-fuzz
       - run: |
           for target in $(cargo fuzz list 2>/dev/null); do
             cargo fuzz run "$target" -- -max_total_time=300
