@@ -8,7 +8,7 @@ use crate::unicode::nfd;
 #[cfg(target_vendor = "apple")]
 use crate::utils::SubstringOrOwned;
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
-use crate::utils::{cow, str_cow_to_bytes};
+use crate::utils::{cow, cow_str_to_bytes};
 use alloc::borrow::Cow;
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
 use alloc::format;
@@ -102,7 +102,7 @@ pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, [u8]> {
         result = Cow::Owned(format!("{fullwidth}{}", &owned[first.len_utf8()..]));
     }
 
-    str_cow_to_bytes(result)
+    cow_str_to_bytes(result)
 }
 
 /// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
@@ -137,7 +137,7 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
 #[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
 #[allow(clippy::unnecessary_wraps)]
 pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
-    Ok(str_cow_to_bytes(cow(
+    Ok(cow_str_to_bytes(cow(
         nfd(s).trim_start_matches('\u{FEFF}').chars(),
         s,
     )))
@@ -160,7 +160,7 @@ pub fn os_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
 #[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
 #[allow(clippy::unnecessary_wraps)]
 pub fn os_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
-    Ok(crate::java_modified_utf8::str_to_os_bytes(Cow::Borrowed(s)))
+    Ok(crate::java_modified_utf8::encode_os_utf8(Cow::Borrowed(s)))
 }
 
 #[cfg(test)]

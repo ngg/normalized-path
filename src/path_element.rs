@@ -158,8 +158,9 @@ impl<'a> PathElementCS<'a> {
     ///
     /// ```
     /// # use normalized_path::PathElementCS;
-    /// let pe = PathElementCS::new("Hello.txt").unwrap();
+    /// let pe = PathElementCS::new("Hello.txt")?;
     /// assert_eq!(pe.normalized(), "Hello.txt"); // case preserved
+    /// # Ok::<(), normalized_path::Error>(())
     /// ```
     pub fn new(original: impl Into<Cow<'a, str>>) -> Result<Self> {
         Self::with_case_sensitivity(original, CaseSensitive)
@@ -203,8 +204,9 @@ impl<'a> PathElementCI<'a> {
     ///
     /// ```
     /// # use normalized_path::PathElementCI;
-    /// let pe = PathElementCI::new("Hello.txt").unwrap();
+    /// let pe = PathElementCI::new("Hello.txt")?;
     /// assert_eq!(pe.normalized(), "hello.txt"); // case-folded
+    /// # Ok::<(), normalized_path::Error>(())
     /// ```
     pub fn new(original: impl Into<Cow<'a, str>>) -> Result<Self> {
         Self::with_case_sensitivity(original, CaseInsensitive)
@@ -376,11 +378,11 @@ where
         case_sensitivity: impl Into<S>,
     ) -> Result<Self> {
         let cow_str = match original.into() {
-            Cow::Borrowed(b) => crate::utils::decode_utf8_lossy(b),
+            Cow::Borrowed(b) => crate::java_modified_utf8::decode_utf8_lossy(b),
             Cow::Owned(v) => match String::from_utf8(v) {
                 Ok(s) => Cow::Owned(s),
                 Err(e) => {
-                    let decoded = crate::utils::decode_utf8_lossy(e.as_bytes());
+                    let decoded = crate::java_modified_utf8::decode_utf8_lossy(e.as_bytes());
                     Cow::Owned(decoded.into_owned())
                 }
             },
@@ -449,9 +451,10 @@ where
     ///
     /// ```
     /// # use normalized_path::PathElementCS;
-    /// let pe = PathElementCS::new("  Hello.txt  ").unwrap();
+    /// let pe = PathElementCS::new("  Hello.txt  ")?;
     /// assert_eq!(pe.original(), "  Hello.txt  ");
     /// assert_eq!(pe.normalized(), "Hello.txt");
+    /// # Ok::<(), normalized_path::Error>(())
     /// ```
     pub fn original(&self) -> &str {
         &self.original
@@ -468,8 +471,9 @@ where
     ///
     /// ```
     /// # use normalized_path::PathElementCS;
-    /// assert!(PathElementCS::new("hello.txt").unwrap().is_normalized());
-    /// assert!(!PathElementCS::new("  hello.txt  ").unwrap().is_normalized());
+    /// assert!(PathElementCS::new("hello.txt")?.is_normalized());
+    /// assert!(!PathElementCS::new("  hello.txt  ")?.is_normalized());
+    /// # Ok::<(), normalized_path::Error>(())
     /// ```
     pub fn is_normalized(&self) -> bool {
         self.normalized.is_identity(&self.original)
@@ -506,8 +510,9 @@ where
     ///
     /// ```
     /// # use normalized_path::PathElementCS;
-    /// let pe = PathElementCS::new("hello.txt").unwrap();
+    /// let pe = PathElementCS::new("hello.txt")?;
     /// assert_eq!(pe.os_compatible(), b"hello.txt");
+    /// # Ok::<(), normalized_path::Error>(())
     /// ```
     pub fn os_compatible(&self) -> &[u8] {
         self.os_compatible.as_ref(self.original.as_bytes())
@@ -515,22 +520,19 @@ where
 
     /// Consumes `self` and returns the OS-compatible form as a [`Cow<[u8]>`](Cow).
     pub fn into_os_compatible(self) -> Cow<'a, [u8]> {
-        let original_bytes = crate::utils::str_cow_to_bytes(self.original);
+        let original_bytes = crate::utils::cow_str_to_bytes(self.original);
         self.os_compatible.into_cow(original_bytes)
     }
 
     /// Returns the OS-compatible form as an [`OsStr`] reference.
-    #[cfg(all(feature = "std", any(unix, target_os = "wasi")))]
+    #[cfg(all(feature = "std", unix))]
     pub fn os_str(&self) -> &OsStr {
-        #[cfg(unix)]
         use std::os::unix::ffi::OsStrExt;
-        #[cfg(target_os = "wasi")]
-        use std::os::wasi::ffi::OsStrExt;
         OsStr::from_bytes(self.os_compatible())
     }
 
     /// Returns the OS-compatible form as an [`OsStr`] reference.
-    #[cfg(all(feature = "std", not(any(unix, target_os = "wasi"))))]
+    #[cfg(all(feature = "std", not(unix)))]
     #[allow(clippy::missing_panics_doc)]
     pub fn os_str(&self) -> &OsStr {
         OsStr::new(
@@ -540,16 +542,10 @@ where
     }
 
     /// Consumes `self` and returns the OS-compatible form as a [`Cow<OsStr>`](Cow).
-    #[cfg(all(feature = "std", any(unix, target_os = "wasi")))]
+    #[cfg(all(feature = "std", unix))]
     pub fn into_os_str(self) -> Cow<'a, OsStr> {
-        #[cfg(unix)]
         use std::os::unix::ffi::OsStrExt as _;
-        #[cfg(unix)]
         use std::os::unix::ffi::OsStringExt as _;
-        #[cfg(target_os = "wasi")]
-        use std::os::wasi::ffi::OsStrExt as _;
-        #[cfg(target_os = "wasi")]
-        use std::os::wasi::ffi::OsStringExt as _;
         match self.into_os_compatible() {
             Cow::Borrowed(b) => Cow::Borrowed(OsStr::from_bytes(b)),
             Cow::Owned(v) => Cow::Owned(OsString::from_vec(v)),
@@ -557,7 +553,7 @@ where
     }
 
     /// Consumes `self` and returns the OS-compatible form as a [`Cow<OsStr>`](Cow).
-    #[cfg(all(feature = "std", not(any(unix, target_os = "wasi"))))]
+    #[cfg(all(feature = "std", not(unix)))]
     #[allow(clippy::missing_panics_doc)]
     pub fn into_os_str(self) -> Cow<'a, OsStr> {
         match self.into_os_compatible() {
@@ -582,11 +578,12 @@ where
     /// ```
     /// # use std::borrow::Cow;
     /// # use normalized_path::PathElementCS;
-    /// let borrowed = PathElementCS::new(Cow::Borrowed("hello")).unwrap();
+    /// let borrowed = PathElementCS::new(Cow::Borrowed("hello"))?;
     /// assert!(borrowed.is_borrowed());
     ///
-    /// let owned = PathElementCS::new(Cow::<str>::Owned("hello".into())).unwrap();
+    /// let owned = PathElementCS::new(Cow::<str>::Owned("hello".into()))?;
     /// assert!(!owned.is_borrowed());
+    /// # Ok::<(), normalized_path::Error>(())
     /// ```
     pub fn is_borrowed(&self) -> bool {
         matches!(self.original, Cow::Borrowed(_))

@@ -177,22 +177,24 @@
 //! ```
 //! # use normalized_path::{PathElementCS, PathElementCI};
 //! // Case-sensitive: whitespace trimmed, fullwidth mapped to ASCII, NFC composed
-//! let pe = PathElementCS::new("  \u{FF21}bc.txt  ").unwrap();
+//! let pe = PathElementCS::new("  \u{FF21}bc.txt  ")?;
 //! assert_eq!(pe.normalized(), "Abc.txt");
 //!
 //! // Case-insensitive: additionally case-folded
-//! let pe = PathElementCI::new("Hello.TXT").unwrap();
+//! let pe = PathElementCI::new("Hello.TXT")?;
 //! assert_eq!(pe.normalized(), "hello.txt");
+//! # Ok::<(), normalized_path::Error>(())
 //! ```
 //!
 //! Equality is based on the normalized form, so different originals can compare equal:
 //!
 //! ```
 //! # use normalized_path::PathElementCS;
-//! let a = PathElementCS::new("  hello.txt  ").unwrap();
-//! let b = PathElementCS::new("hello.txt").unwrap();
+//! let a = PathElementCS::new("  hello.txt  ")?;
+//! let b = PathElementCS::new("hello.txt")?;
 //! assert_eq!(a, b);
 //! assert_ne!(a.original(), b.original());
+//! # Ok::<(), normalized_path::Error>(())
 //! ```
 //!
 //! The typed variants implement [`Hash`](core::hash::Hash), so they work in
@@ -248,7 +250,6 @@
 extern crate alloc;
 
 mod case_sensitivity;
-#[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
 mod java_modified_utf8;
 #[cfg(feature = "jni")]
 mod jni_support;
@@ -259,23 +260,10 @@ mod unicode;
 mod utils;
 
 pub use case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
-#[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
+#[cfg(all(unix, not(target_vendor = "apple")))]
 pub use java_modified_utf8::configure_java_modified_utf8;
-#[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
 pub use java_modified_utf8::is_using_java_modified_utf8;
-
-/// Returns whether Java Modified UTF-8 encoding is enabled for OS-compatible output.
-///
-/// Always returns `false` on Windows and Apple platforms.
-#[cfg(any(target_os = "windows", target_vendor = "apple"))]
-#[must_use]
-pub fn is_using_java_modified_utf8() -> bool {
-    false
-}
-#[cfg(all(
-    feature = "jni",
-    not(any(target_os = "windows", target_vendor = "apple"))
-))]
+#[cfg(all(feature = "jni", all(unix, not(target_vendor = "apple"))))]
 pub use jni_support::configure_java_modified_utf8_from_jni;
 pub use path_element::{PathElement, PathElementCI, PathElementCS, PathElementGeneric};
 
@@ -328,11 +316,9 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[cfg(any(feature = "__test", test))]
 pub mod test_helpers {
-    #[cfg(all(
-        not(any(target_os = "windows", target_vendor = "apple")),
-        feature = "std"
-    ))]
+    #[cfg(all(unix, not(target_vendor = "apple"), feature = "std"))]
     pub use crate::java_modified_utf8::thread_override_java_modified_utf8;
+    pub use crate::java_modified_utf8::{decode_utf8_lossy, encode_java_modified_utf8};
     pub use crate::normalize::{
         is_whitespace_like, map_control_chars, map_fullwidth, map_turkish_i,
         normalize_ci_from_normalized_cs, normalize_cs, trim_whitespace_like, validate_path_element,
@@ -342,5 +328,4 @@ pub mod test_helpers {
         windows_compatible_from_normalized_cs,
     };
     pub use crate::unicode::{case_fold, is_starter, is_whitespace, nfc, nfd};
-    pub use crate::utils::{decode_utf8_lossy, to_java_modified_utf8};
 }

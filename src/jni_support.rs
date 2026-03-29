@@ -1,7 +1,7 @@
-#[cfg(any(not(any(target_os = "windows", target_vendor = "apple")), test))]
+#[cfg(any(all(unix, not(target_vendor = "apple")), test))]
 use crate::Result;
 
-#[cfg(any(not(any(target_os = "windows", target_vendor = "apple")), test))]
+#[cfg(any(all(unix, not(target_vendor = "apple")), test))]
 fn jni_uses_java_modified_utf8(env: &mut jni::Env<'_>) -> Result<bool> {
     match env
         .new_string("\u{10000}")?
@@ -20,7 +20,7 @@ fn jni_uses_java_modified_utf8(env: &mut jni::Env<'_>) -> Result<bool> {
 ///
 /// # Errors
 /// Returns [`Error::JniError`](crate::Error::JniError) if the JNI calls fail.
-#[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
+#[cfg(all(unix, not(target_vendor = "apple")))]
 pub fn configure_java_modified_utf8_from_jni(env: &mut jni::Env<'_>) -> Result<()> {
     let uses_mutf8 = jni_uses_java_modified_utf8(env)?;
     crate::java_modified_utf8::configure_java_modified_utf8(uses_mutf8);
