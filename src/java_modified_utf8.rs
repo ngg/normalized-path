@@ -73,7 +73,7 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{java_modified_utf8, str_to_os_bytes};
+    use super::{is_using_java_modified_utf8, str_to_os_bytes};
     use crate::utils::decode_utf8_lossy;
 
     #[test]
@@ -106,7 +106,7 @@ mod tests {
         use wasm_bindgen_test::wasm_bindgen_test as test;
 
         use super::super::{
-            java_modified_utf8, str_to_os_bytes, thread_override_java_modified_utf8,
+            is_using_java_modified_utf8, str_to_os_bytes, thread_override_java_modified_utf8,
         };
         use crate::path_element::PathElementCS;
         use crate::utils::decode_utf8_lossy;
