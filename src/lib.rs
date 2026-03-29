@@ -272,10 +272,6 @@ pub enum Error {
     /// An OS-level operation failed (e.g., Apple's `CFStringGetFileSystemRepresentation`).
     #[error("OS error")]
     OSError,
-
-    /// The input `OsStr` is not valid UTF-8.
-    #[error("invalid UTF-8")]
-    InvalidUtf8,
 }
 
 /// A [`Result`](core::result::Result) type alias using this crate's [`Error`].

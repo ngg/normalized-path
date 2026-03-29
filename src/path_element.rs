@@ -1,8 +1,8 @@
 use alloc::borrow::Cow;
+use alloc::string::String;
 #[cfg(feature = "std")]
 use std::ffi::{OsStr, OsString};
 
-use crate::Error;
 use crate::Result;
 use crate::case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
 use crate::normalize::{normalize_ci_from_normalized_cs, normalize_cs};
@@ -64,7 +64,7 @@ where
             .field("normalized", &self.normalized())
             .field(
                 "os_compatible",
-                &alloc::string::String::from_utf8_lossy(self.os_compatible()),
+                &String::from_utf8_lossy(self.os_compatible()),
             )
             .field("case_sensitivity", &self.case_sensitivity)
             .finish()
@@ -167,20 +167,24 @@ impl<'a> PathElementCS<'a> {
 
     /// Creates a new case-sensitive path element from a byte slice.
     ///
+    /// Invalid UTF-8 is replaced with U+FFFD.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidUtf8`](crate::Error::InvalidUtf8) if the bytes are not
-    /// valid UTF-8, or another [`Error`](crate::Error) variant if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
+    /// or contains `/`).
     pub fn from_bytes(original: impl Into<Cow<'a, [u8]>>) -> Result<Self> {
         Self::from_bytes_with_case_sensitivity(original, CaseSensitive)
     }
 
     /// Creates a new case-sensitive path element from an OS string.
     ///
+    /// Invalid UTF-8 is replaced with U+FFFD.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidUtf8`](crate::Error::InvalidUtf8) if the `OsStr` is not
-    /// valid UTF-8, or another [`Error`](crate::Error) variant if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
+    /// or contains `/`).
     #[cfg(feature = "std")]
     pub fn from_os_str(original: impl Into<Cow<'a, OsStr>>) -> Result<Self> {
         Self::from_os_str_with_case_sensitivity(original, CaseSensitive)
@@ -206,20 +210,24 @@ impl<'a> PathElementCI<'a> {
 
     /// Creates a new case-insensitive path element from a byte slice.
     ///
+    /// Invalid UTF-8 is replaced with U+FFFD.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidUtf8`](crate::Error::InvalidUtf8) if the bytes are not
-    /// valid UTF-8, or another [`Error`](crate::Error) variant if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
+    /// or contains `/`).
     pub fn from_bytes(original: impl Into<Cow<'a, [u8]>>) -> Result<Self> {
         Self::from_bytes_with_case_sensitivity(original, CaseInsensitive)
     }
 
     /// Creates a new case-insensitive path element from an OS string.
     ///
+    /// Invalid UTF-8 is replaced with U+FFFD.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidUtf8`](crate::Error::InvalidUtf8) if the `OsStr` is not
-    /// valid UTF-8, or another [`Error`](crate::Error) variant if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
+    /// or contains `/`).
     #[cfg(feature = "std")]
     pub fn from_os_str(original: impl Into<Cow<'a, OsStr>>) -> Result<Self> {
         Self::from_os_str_with_case_sensitivity(original, CaseInsensitive)
@@ -241,10 +249,12 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Creates a new path element from a byte slice with runtime-selected case sensitivity.
     ///
+    /// Invalid UTF-8 is replaced with U+FFFD.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidUtf8`](crate::Error::InvalidUtf8) if the bytes are not
-    /// valid UTF-8, or another [`Error`](crate::Error) variant if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
+    /// or contains `/`).
     pub fn from_bytes(
         original: impl Into<Cow<'a, [u8]>>,
         case_sensitivity: impl Into<CaseSensitivity>,
@@ -254,10 +264,12 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Creates a new path element from an OS string with runtime-selected case sensitivity.
     ///
+    /// Invalid UTF-8 is replaced with U+FFFD.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidUtf8`](crate::Error::InvalidUtf8) if the `OsStr` is not
-    /// valid UTF-8, or another [`Error`](crate::Error) variant if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
+    /// or contains `/`).
     #[cfg(feature = "std")]
     pub fn from_os_str(
         original: impl Into<Cow<'a, OsStr>>,
@@ -286,30 +298,33 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Convenience constructor for a case-sensitive `PathElement` from bytes.
     ///
+    /// Invalid UTF-8 is replaced with U+FFFD.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the bytes are not valid UTF-8 or the
-    /// name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid.
     pub fn from_bytes_cs(original: impl Into<Cow<'a, [u8]>>) -> Result<Self> {
         Self::from_bytes_with_case_sensitivity(original, CaseSensitive)
     }
 
     /// Convenience constructor for a case-insensitive `PathElement` from bytes.
     ///
+    /// Invalid UTF-8 is replaced with U+FFFD.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the bytes are not valid UTF-8 or the
-    /// name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid.
     pub fn from_bytes_ci(original: impl Into<Cow<'a, [u8]>>) -> Result<Self> {
         Self::from_bytes_with_case_sensitivity(original, CaseInsensitive)
     }
 
     /// Convenience constructor for a case-sensitive `PathElement` from an OS string.
     ///
+    /// Invalid UTF-8 is replaced with U+FFFD.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the `OsStr` is not valid UTF-8 or the
-    /// name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid.
     #[cfg(feature = "std")]
     pub fn from_os_str_cs(original: impl Into<Cow<'a, OsStr>>) -> Result<Self> {
         Self::from_os_str_with_case_sensitivity(original, CaseSensitive)
@@ -317,10 +332,11 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Convenience constructor for a case-insensitive `PathElement` from an OS string.
     ///
+    /// Invalid UTF-8 is replaced with U+FFFD.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error`](crate::Error) if the `OsStr` is not valid UTF-8 or the
-    /// name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid.
     #[cfg(feature = "std")]
     pub fn from_os_str_ci(original: impl Into<Cow<'a, OsStr>>) -> Result<Self> {
         Self::from_os_str_with_case_sensitivity(original, CaseInsensitive)
@@ -334,25 +350,26 @@ where
     /// Creates a new path element from a byte slice with an explicit case-sensitivity
     /// marker.
     ///
+    /// Invalid UTF-8 is replaced with U+FFFD.
+    ///
     /// This is the most general byte-input constructor. The typed aliases
     /// ([`PathElementCS::from_bytes`], [`PathElementCI::from_bytes`]) and the
     /// runtime-dynamic constructors delegate to this method.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidUtf8`](crate::Error::InvalidUtf8) if the bytes are not
-    /// valid UTF-8, or another [`Error`](crate::Error) variant if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
+    /// or contains `/`).
     pub fn from_bytes_with_case_sensitivity(
         original: impl Into<Cow<'a, [u8]>>,
         case_sensitivity: impl Into<S>,
     ) -> Result<Self> {
         let cow_str = match original.into() {
-            Cow::Borrowed(b) => {
-                Cow::Borrowed(core::str::from_utf8(b).map_err(|_| Error::InvalidUtf8)?)
-            }
-            Cow::Owned(v) => {
-                Cow::Owned(alloc::string::String::from_utf8(v).map_err(|_| Error::InvalidUtf8)?)
-            }
+            Cow::Borrowed(b) => String::from_utf8_lossy(b),
+            Cow::Owned(v) => match String::from_utf8(v) {
+                Ok(s) => Cow::Owned(s),
+                Err(e) => Cow::Owned(String::from_utf8_lossy(e.as_bytes()).into_owned()),
+            },
         };
         Self::with_case_sensitivity(cow_str, case_sensitivity)
     }
@@ -360,10 +377,12 @@ where
     /// Creates a new path element from an OS string with an explicit case-sensitivity
     /// marker.
     ///
+    /// Invalid UTF-8 is replaced with U+FFFD.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidUtf8`](crate::Error::InvalidUtf8) if the `OsStr` is not
-    /// valid UTF-8, or another [`Error`](crate::Error) variant if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
+    /// or contains `/`).
     #[cfg(feature = "std")]
     pub fn from_os_str_with_case_sensitivity(
         original: impl Into<Cow<'a, OsStr>>,
@@ -1309,8 +1328,8 @@ mod tests {
         fn from_os_str_invalid_utf8_borrowed() {
             use std::os::unix::ffi::OsStrExt;
             let input = OsStr::from_bytes(&[0x68, 0x69, 0xFF]); // "hi" + invalid byte
-            let err = PathElementCS::from_os_str(input).unwrap_err();
-            assert!(matches!(err, crate::Error::InvalidUtf8));
+            let pe = PathElementCS::from_os_str(input).unwrap();
+            assert_eq!(pe.original(), "hi\u{FFFD}");
         }
 
         #[cfg(unix)]
@@ -1318,18 +1337,18 @@ mod tests {
         fn from_os_str_invalid_utf8_owned() {
             use std::os::unix::ffi::OsStrExt;
             let input = OsStr::from_bytes(&[0x68, 0x69, 0xFF]).to_os_string();
-            let err = PathElementCS::from_os_str(input).unwrap_err();
-            assert!(matches!(err, crate::Error::InvalidUtf8));
+            let pe = PathElementCS::from_os_str(input).unwrap();
+            assert_eq!(pe.original(), "hi\u{FFFD}");
         }
 
         #[cfg(windows)]
         #[test]
         fn from_os_str_invalid_utf8_borrowed() {
             use std::os::windows::ffi::OsStringExt;
-            // Unpaired surrogate U+D800
+            // Unpaired surrogate U+D800 encodes as 3 WTF-8 bytes, each replaced by U+FFFD
             let input = OsString::from_wide(&[0x68, 0xD800, 0x69]);
-            let err = PathElementCS::from_os_str(input.as_os_str()).unwrap_err();
-            assert!(matches!(err, crate::Error::InvalidUtf8));
+            let pe = PathElementCS::from_os_str(input.as_os_str()).unwrap();
+            assert_eq!(pe.original(), "h\u{FFFD}\u{FFFD}\u{FFFD}i");
         }
 
         #[cfg(windows)]
@@ -1337,8 +1356,8 @@ mod tests {
         fn from_os_str_invalid_utf8_owned() {
             use std::os::windows::ffi::OsStringExt;
             let input = OsString::from_wide(&[0x68, 0xD800, 0x69]);
-            let err = PathElementCS::from_os_str(input).unwrap_err();
-            assert!(matches!(err, crate::Error::InvalidUtf8));
+            let pe = PathElementCS::from_os_str(input).unwrap();
+            assert_eq!(pe.original(), "h\u{FFFD}\u{FFFD}\u{FFFD}i");
         }
 
         // CI "H\tllo": original="H\tllo", os_compatible="H␉llo", normalized="h␉llo"
@@ -1480,17 +1499,17 @@ mod tests {
         }
 
         #[test]
-        fn from_bytes_invalid_utf8_borrowed() {
+        fn from_bytes_invalid_utf8_borrowed_uses_replacement() {
             let input: &[u8] = &[0x68, 0x69, 0xFF]; // "hi" + invalid byte
-            let err = PathElementCS::from_bytes(input).unwrap_err();
-            assert!(matches!(err, crate::Error::InvalidUtf8));
+            let pe = PathElementCS::from_bytes(input).unwrap();
+            assert_eq!(pe.original(), "hi\u{FFFD}");
         }
 
         #[test]
-        fn from_bytes_invalid_utf8_owned() {
+        fn from_bytes_invalid_utf8_owned_uses_replacement() {
             let input = vec![0x68, 0x69, 0xFF];
-            let err = PathElementCS::from_bytes(input).unwrap_err();
-            assert!(matches!(err, crate::Error::InvalidUtf8));
+            let pe = PathElementCS::from_bytes(input).unwrap();
+            assert_eq!(pe.original(), "hi\u{FFFD}");
         }
 
         #[test]
