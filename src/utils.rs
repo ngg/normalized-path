@@ -47,7 +47,12 @@ fn decode_cesu8_pair(bytes: &[u8], i: usize, high: u32) -> Option<(char, usize)>
     None
 }
 
-#[cfg(any(test, feature = "__test"))]
+#[cfg(any(
+    not(any(target_os = "windows", target_vendor = "apple")),
+    test,
+    feature = "__test"
+))]
+#[allow(clippy::cast_possible_truncation)]
 pub fn to_java_modified_utf8(s: &str) -> Cow<'_, [u8]> {
     let needs_encoding = s.as_bytes().contains(&0) || s.chars().any(|c| c as u32 > 0xFFFF);
     if !needs_encoding {

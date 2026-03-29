@@ -1,6 +1,3 @@
-use alloc::borrow::Cow;
-#[cfg(any(target_os = "windows", test, feature = "__test"))]
-use alloc::format;
 #[cfg(any(target_vendor = "apple", test, feature = "__test"))]
 use alloc::vec::Vec;
 
@@ -13,13 +10,12 @@ use crate::unicode::case_fold;
 use crate::unicode::nfd;
 #[cfg(any(target_vendor = "apple", test, feature = "__test"))]
 use crate::utils::SubstringOrOwned;
-#[cfg(any(
-    target_os = "windows",
-    target_vendor = "apple",
-    test,
-    feature = "__test"
-))]
-use crate::utils::{cow, str_cow_to_bytes};
+#[cfg(any(target_os = "windows", test, feature = "__test"))]
+use crate::utils::cow;
+use crate::utils::str_cow_to_bytes;
+use alloc::borrow::Cow;
+#[cfg(any(target_os = "windows", test, feature = "__test"))]
+use alloc::format;
 
 /// Windows reserved device names (case-folded, checked against case-folded stem before first dot).
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
@@ -164,7 +160,7 @@ pub fn os_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
 #[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
 #[allow(clippy::unnecessary_wraps)]
 pub fn os_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
-    Ok(Cow::Borrowed(s.as_bytes()))
+    Ok(crate::java_modified_utf8::str_to_os_bytes(Cow::Borrowed(s)))
 }
 
 #[cfg(test)]

@@ -134,8 +134,9 @@
 //!   and their superscript-digit variants).
 //! - **Apple (macOS/iOS)**: converted using [`CFStringGetFileSystemRepresentation`](https://developer.apple.com/documentation/corefoundation/cfstringgetfilesystemrepresentation(_:_:_:))
 //!   as recommended by Apple's documentation (produces a representation similar to NFD).
-// TODO: On Android, the OS compatibility mapping should detect whether the
-// current runtime uses CESU-8 or UTF-8 and produce the appropriate encoding.
+//! - **Android (Java Modified UTF-8)**: when [`set_java_modified_utf8(true)`](set_java_modified_utf8)
+//!   is called, the OS-compatible form encodes supplementary characters as CESU-8
+//!   surrogate pairs, matching the encoding used by older Android runtimes.
 //! - **Other platforms**: the OS-compatible form is identical to the case-sensitive
 //!   normalized form.
 //!
@@ -236,6 +237,8 @@
 extern crate alloc;
 
 mod case_sensitivity;
+#[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
+mod java_modified_utf8;
 mod normalize;
 mod os;
 mod path_element;
@@ -243,6 +246,8 @@ mod unicode;
 mod utils;
 
 pub use case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
+#[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
+pub use java_modified_utf8::{java_modified_utf8, set_java_modified_utf8};
 pub use path_element::{PathElement, PathElementCI, PathElementCS, PathElementGeneric};
 
 /// Errors that can occur during path element normalization and validation.
@@ -289,6 +294,11 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[cfg(any(feature = "__test", test))]
 pub mod test_helpers {
+    #[cfg(all(
+        not(any(target_os = "windows", target_vendor = "apple")),
+        feature = "std"
+    ))]
+    pub use crate::java_modified_utf8::thread_override_java_modified_utf8;
     pub use crate::normalize::{
         is_whitespace_like, map_control_chars, map_fullwidth, map_turkish_i,
         normalize_ci_from_normalized_cs, normalize_cs, trim_whitespace_like, validate_path_element,

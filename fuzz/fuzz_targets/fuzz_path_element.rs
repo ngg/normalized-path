@@ -265,6 +265,21 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
         );
         check("fold_turkic", &cm.fold_turkic_string(case_input));
     }
+
+    // os_compatible round-trip: from_bytes(os_compatible) must produce the same normalized form.
+    let pe_rt = PathElement::from_bytes(pe.os_compatible(), cs)
+        .expect("assertion error: from_bytes failed on os_compatible output");
+    assert_eq!(
+        normalized,
+        pe_rt.normalized(),
+        "os_compatible round-trip mismatch\n\
+         input:         {input:?}\n\
+         os_compatible: {:?}\n\
+         normalized:    {normalized:?}\n\
+         got:           {:?}",
+        String::from_utf8_lossy(pe.os_compatible()),
+        pe_rt.normalized()
+    );
 }
 
 fuzz_target!(|data: &[u8]| {
