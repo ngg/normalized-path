@@ -6,26 +6,31 @@ use icu_properties::props::{CanonicalCombiningClass, WhiteSpace};
 use icu_properties::{CodePointMapData, CodePointSetData};
 
 /// NFD normalization (canonical decomposition).
+#[must_use]
 pub fn nfd(s: &str) -> Cow<'_, str> {
     DecomposingNormalizer::new_nfd().normalize(s)
 }
 
 /// NFC normalization (canonical composition).
+#[must_use]
 pub fn nfc(s: &str) -> Cow<'_, str> {
     ComposingNormalizer::new_nfc().normalize(s)
 }
 
 /// Unicode `toCasefold()`.
+#[must_use]
 pub fn case_fold(s: &str) -> Cow<'_, str> {
     CaseMapper::new().fold_string(s)
 }
 
 /// Unicode `White_Space` property check.
+#[must_use]
 pub fn is_whitespace(c: char) -> bool {
     CodePointSetData::new::<WhiteSpace>().contains(c)
 }
 
 /// Whether `c` has Canonical Combining Class 0 (a "starter" — not a combining mark).
+#[must_use]
 pub fn is_starter(c: char) -> bool {
     CodePointMapData::<CanonicalCombiningClass>::new().get(c)
         == CanonicalCombiningClass::NotReordered

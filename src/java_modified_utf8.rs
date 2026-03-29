@@ -41,6 +41,7 @@ pub fn java_modified_utf8() -> bool {
 /// Returns an RAII guard that restores the previous value when dropped.
 /// This allows parallel tests to independently control the flag.
 #[cfg(all(feature = "std", any(test, feature = "__test")))]
+#[must_use]
 pub fn thread_override_java_modified_utf8(val: bool) -> impl Drop {
     struct Guard(Option<bool>);
     impl Drop for Guard {

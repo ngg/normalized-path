@@ -1084,7 +1084,7 @@ mod tests {
             .map(|s| PathElementCS::new(Cow::Borrowed(*s)).unwrap())
             .collect();
         elems.sort();
-        let names: Vec<_> = elems.iter().map(|e| e.normalized()).collect();
+        let names: Vec<_> = elems.iter().map(PathElementCS::normalized).collect();
         assert_eq!(names, &["apple", "banana", "cherry"]);
     }
 
@@ -1095,7 +1095,7 @@ mod tests {
             .map(|s| PathElementCI::new(Cow::Borrowed(*s)).unwrap())
             .collect();
         elems.sort();
-        let names: Vec<_> = elems.iter().map(|e| e.normalized()).collect();
+        let names: Vec<_> = elems.iter().map(PathElementCI::normalized).collect();
         assert_eq!(names, &["apple", "banana", "cherry"]);
     }
 

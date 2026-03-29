@@ -52,6 +52,7 @@ fn decode_cesu8_pair(bytes: &[u8], i: usize, high: u32) -> Option<(char, usize)>
     test,
     feature = "__test"
 ))]
+#[must_use]
 #[allow(clippy::cast_possible_truncation)]
 pub fn to_java_modified_utf8(s: &str) -> Cow<'_, [u8]> {
     let needs_encoding = s.as_bytes().contains(&0) || s.chars().any(|c| c as u32 > 0xFFFF);
@@ -89,6 +90,7 @@ pub fn to_java_modified_utf8(s: &str) -> Cow<'_, [u8]> {
     Cow::Owned(out)
 }
 
+#[must_use]
 pub fn decode_utf8_lossy(bytes: &[u8]) -> Cow<'_, str> {
     // Fast path: if valid UTF-8, borrow directly.
     if let Ok(s) = core::str::from_utf8(bytes) {

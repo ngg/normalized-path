@@ -6,11 +6,13 @@ use crate::{Error, Result};
 
 /// `White_Space` property check extended with Control Pictures (U+2409–U+240D) that
 /// correspond to whitespace control characters (HT, LF, VT, FF, CR), and the BOM (U+FEFF).
+#[must_use]
 pub fn is_whitespace_like(c: char) -> bool {
     is_whitespace(c) || ('\u{2409}'..='\u{240D}').contains(&c) || c == '\u{FEFF}'
 }
 
 /// Map Fullwidth characters (U+FF01..U+FF5E) to their ASCII equivalents.
+#[must_use]
 pub fn map_fullwidth(s: &str) -> Cow<'_, str> {
     cow(
         s.chars().map(|c| match c {
@@ -36,6 +38,7 @@ pub fn trim_whitespace_like(s: &str) -> &str {
 ///
 /// Additionally, U+0307 COMBINING DOT ABOVE is stripped after I/i (case-insensitive)
 /// to handle NFD decomposition of İ (I + U+0307), with intervening combiners allowed.
+#[must_use]
 pub fn map_turkish_i(s: &str) -> Cow<'_, str> {
     cow(
         s.chars()
@@ -71,6 +74,7 @@ pub fn map_turkish_i(s: &str) -> Cow<'_, str> {
 /// Map control characters to Unicode Control Pictures.
 /// 0x01-0x1F → U+2401-U+241F, 0x7F → U+2421.
 /// Null bytes (0x00) are excluded — they are rejected by validation instead.
+#[must_use]
 pub fn map_control_chars(s: &str) -> Cow<'_, str> {
     cow(
         s.chars().map(|c| match c {
@@ -86,6 +90,10 @@ pub fn map_control_chars(s: &str) -> Cow<'_, str> {
 ///
 /// Pipeline: NFD → whitespace trimming → fullwidth mapping →
 /// control char mapping → validation → NFC.
+///
+/// # Errors
+///
+/// Returns an error if the name is invalid.
 pub fn normalize_cs(name: &str) -> Result<Cow<'_, str>> {
     let s = nfd(name);
     let s = trim_whitespace_like(&s);
@@ -101,6 +109,7 @@ pub fn normalize_cs(name: &str) -> Result<Cow<'_, str>> {
 ///
 /// Applies case folding, Turkish İ mapping, and NFC to a CS-normalized name.
 /// Skips the steps already applied by CS normalization (trim, fullwidth, control chars).
+#[must_use]
 pub fn normalize_ci_from_normalized_cs(cs_normalized: &str) -> Cow<'_, str> {
     let s = nfd(cs_normalized);
     let s = case_fold(&s);
@@ -113,6 +122,10 @@ pub fn normalize_ci_from_normalized_cs(cs_normalized: &str) -> Cow<'_, str> {
 /// Validate a normalized path element name.
 ///
 /// Rejects empty strings, `.`, `..`, names containing `/`, and names containing `\0`.
+///
+/// # Errors
+///
+/// Returns an error if the name is invalid.
 pub fn validate_path_element(name: &str) -> Result<()> {
     match name {
         "" => Err(Error::Empty),
@@ -455,8 +468,8 @@ mod tests {
     #[test]
     fn normalize_normalizes_unicode() {
         let nfd_input = normalize_cs("e\u{0301}.txt").unwrap();
-        let nfc_input = normalize_cs("\u{00E9}.txt").unwrap();
-        assert_eq!(nfd_input, nfc_input);
+        let composed = normalize_cs("\u{00E9}.txt").unwrap();
+        assert_eq!(nfd_input, composed);
     }
 
     #[test]
@@ -825,11 +838,11 @@ mod tests {
         // NFC and NFD inputs produce the same CS-normalized form (NFC),
         // so ci_from_cs must give the same result.
         let nfc_cs = normalize_cs("\u{00C9}.txt").unwrap();
-        let nfd_cs = normalize_cs("E\u{0301}.txt").unwrap();
-        assert_eq!(nfc_cs, nfd_cs);
+        let decomposed_cs = normalize_cs("E\u{0301}.txt").unwrap();
+        assert_eq!(nfc_cs, decomposed_cs);
         assert_eq!(
             normalize_ci_from_normalized_cs(&nfc_cs),
-            normalize_ci_from_normalized_cs(&nfd_cs)
+            normalize_ci_from_normalized_cs(&decomposed_cs)
         );
     }
 

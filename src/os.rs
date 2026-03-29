@@ -5,7 +5,7 @@ use crate::Result;
 use crate::unicode::case_fold;
 #[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
 use crate::unicode::nfd;
-#[cfg(any(target_vendor = "apple", test, feature = "__test"))]
+#[cfg(target_vendor = "apple")]
 use crate::utils::SubstringOrOwned;
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
 use crate::utils::{cow, str_cow_to_bytes};
@@ -69,6 +69,7 @@ fn map_windows_forbidden(c: char) -> char {
 /// Comparison uses Unicode `toCasefold()` so that e.g. "CON", "con", and "Ｃon" (after
 /// fullwidth mapping) all match.
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
+#[must_use]
 pub fn is_reserved_on_windows(name: &str) -> bool {
     let stem = name.split('.').next().unwrap_or(name);
     let folded = case_fold(stem);
@@ -77,6 +78,7 @@ pub fn is_reserved_on_windows(name: &str) -> bool {
 
 /// Windows compatibility mapping: forbidden characters, trailing dots, and reserved names.
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
+#[allow(clippy::missing_panics_doc)]
 pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, [u8]> {
     // Step 1: Map forbidden characters
     let mut result = cow(s.chars().map(map_windows_forbidden), s);
@@ -105,6 +107,9 @@ pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, [u8]> {
 
 /// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
 /// Uses `CFStringGetFileSystemRepresentation` to obtain the Darwin-native byte sequence.
+///
+/// # Errors
+/// Returns an error if the name is invalid.
 #[cfg(target_vendor = "apple")]
 pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
     use objc2_core_foundation::CFString;
@@ -126,6 +131,9 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
 
 /// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
 /// Portable fallback using NFD normalization + leading BOM removal.
+///
+/// # Errors
+/// Returns an error if the name is invalid.
 #[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
 #[allow(clippy::unnecessary_wraps)]
 pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
