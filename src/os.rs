@@ -109,7 +109,6 @@ pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, str> {
 
 /// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
 /// Uses CFStringGetFileSystemRepresentation to obtain the Darwin-native byte sequence.
-// TODO: This cfg-gated implementation has not been tested on an Apple OS.
 #[cfg(target_vendor = "apple")]
 pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, str>> {
     use core::ffi::{CStr, c_char};
