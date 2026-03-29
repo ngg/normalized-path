@@ -31,11 +31,12 @@ fn unmap_control_chars(s: &str) -> String {
         .collect()
 }
 
-fn fuzz_normalize(input: &str, cs: CaseSensitivity) {
-    // Every single transformation of the input should normalize to the same result.
-    let Ok(pe) = PathElement::new(input, cs) else {
+fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
+    // Construct via from_bytes — also exercises the UTF-8 rejection path.
+    let Ok(pe) = PathElement::from_bytes(data, cs) else {
         return;
     };
+    let input = pe.original();
     let normalized = pe.normalized();
     validate_path_element(normalized).expect("validate_path_element must accept normalized output");
 
@@ -51,12 +52,12 @@ fn fuzz_normalize(input: &str, cs: CaseSensitivity) {
     );
     assert_eq!(
         pe.is_os_compatible(),
-        pe.original() == pe.os_compatible(),
+        pe.original().as_bytes() == pe.os_compatible(),
         "is_os_compatible mismatch\n\
          original:      {:?}\n\
          os_compatible: {:?}",
         pe.original(),
-        pe.os_compatible()
+        String::from_utf8_lossy(pe.os_compatible())
     );
 
     // is_reserved_on_windows must be stable under NFD and NFD→casefold→NFD.
@@ -110,11 +111,11 @@ fn fuzz_normalize(input: &str, cs: CaseSensitivity) {
     check("unmap_control_chars", &unmap_control_chars(input));
     check(
         "windows_compatible_from_normalized_cs",
-        &windows_compatible_from_normalized_cs(input),
+        core::str::from_utf8(&windows_compatible_from_normalized_cs(input)).unwrap(),
     );
     check(
         "apple_compatible_from_normalized_cs",
-        &apple_compatible_from_normalized_cs(input).unwrap(),
+        core::str::from_utf8(&apple_compatible_from_normalized_cs(input).unwrap()).unwrap(),
     );
 
     let trimmed = input.trim();
@@ -213,7 +214,6 @@ fuzz_target!(|data: &[u8]| {
     if data.len() > 255 {
         return;
     }
-    let input = String::from_utf8_lossy(data);
-    fuzz_normalize(&input, CaseSensitivity::Sensitive);
-    fuzz_normalize(&input, CaseSensitivity::Insensitive);
+    fuzz_normalize(data, CaseSensitivity::Sensitive);
+    fuzz_normalize(data, CaseSensitivity::Insensitive);
 });

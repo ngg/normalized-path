@@ -1,6 +1,42 @@
 use alloc::borrow::Cow;
 use alloc::borrow::ToOwned;
 use alloc::string::String;
+use core::borrow::Borrow;
+use core::ops::{Index, Range};
+
+/// Trait abstracting over `str` and `[u8]` for [`SubstringOrOwned`].
+pub trait Segment: ToOwned + Index<Range<usize>, Output = Self> {
+    fn as_byte_slice(&self) -> &[u8];
+    fn find_subslice(&self, needle: &Self) -> Option<usize>;
+}
+
+impl Segment for str {
+    fn as_byte_slice(&self) -> &[u8] {
+        self.as_bytes()
+    }
+
+    fn find_subslice(&self, needle: &str) -> Option<usize> {
+        self.find(needle)
+    }
+}
+
+impl Segment for [u8] {
+    fn as_byte_slice(&self) -> &[u8] {
+        self
+    }
+
+    fn find_subslice(&self, needle: &[u8]) -> Option<usize> {
+        memchr::memmem::find(self, needle)
+    }
+}
+
+/// Convert a `Cow<str>` to `Cow<[u8]>` without copying when possible.
+pub fn str_cow_to_bytes(cow: Cow<'_, str>) -> Cow<'_, [u8]> {
+    match cow {
+        Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+        Cow::Owned(s) => Cow::Owned(s.into_bytes()),
+    }
+}
 
 /// Compare `original` char-by-char against `converted`; return `Cow::Borrowed` when:
 /// - All characters match (returns full `original`),
@@ -45,48 +81,77 @@ pub fn cow(converted: impl IntoIterator<Item = char>, original: &str) -> Cow<'_,
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum SubstringOrOwned {
+pub enum SubstringOrOwned<T: ?Sized + Segment> {
     Substring(usize, usize),
-    Owned(String),
+    Owned(<T as ToOwned>::Owned),
 }
 
-impl SubstringOrOwned {
+impl<T: ?Sized + Segment> Clone for SubstringOrOwned<T>
+where
+    <T as ToOwned>::Owned: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::Substring(ofs, len) => Self::Substring(*ofs, *len),
+            Self::Owned(s) => Self::Owned(s.clone()),
+        }
+    }
+}
+
+impl<T: ?Sized + Segment> core::fmt::Debug for SubstringOrOwned<T>
+where
+    <T as ToOwned>::Owned: core::fmt::Debug,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Substring(ofs, len) => f.debug_tuple("Substring").field(ofs).field(len).finish(),
+            Self::Owned(s) => f.debug_tuple("Owned").field(s).finish(),
+        }
+    }
+}
+
+impl<T: ?Sized + Segment> SubstringOrOwned<T>
+where
+    <T as ToOwned>::Owned: Borrow<T>,
+{
     /// If `value` is a substring of `original`, return `Substring`; otherwise `Owned`.
-    pub fn new(value: &str, original: &str) -> Self {
+    pub fn new(value: &T, original: &T) -> Self {
+        let value_bytes = value.as_byte_slice();
+        let original_bytes = original.as_byte_slice();
+
         // Fast path: pointer overlap check.
-        let original_start = original.as_ptr() as usize;
-        let value_start = value.as_ptr() as usize;
+        let original_start = original_bytes.as_ptr() as usize;
+        let value_start = value_bytes.as_ptr() as usize;
         if value_start >= original_start
-            && value_start + value.len() <= original_start + original.len()
+            && value_start + value_bytes.len() <= original_start + original_bytes.len()
         {
-            return Self::Substring(value_start - original_start, value.len());
+            return Self::Substring(value_start - original_start, value_bytes.len());
         }
         // Slow path: search for value content within original.
-        if let Some(offset) = original.find(value) {
-            Self::Substring(offset, value.len())
+        if let Some(offset) = original.find_subslice(value) {
+            Self::Substring(offset, value_bytes.len())
         } else {
             Self::Owned(value.to_owned())
         }
     }
 
     /// Returns `true` if this is a `Substring` spanning the entire original.
-    pub fn is_identity(&self, original: &str) -> bool {
-        matches!(self, Self::Substring(0, len) if *len == original.len())
+    pub fn is_identity(&self, original: &T) -> bool {
+        matches!(self, Self::Substring(0, len) if *len == original.as_byte_slice().len())
     }
 
-    pub fn as_str<'a>(&'a self, original: &'a str) -> &'a str {
+    pub fn as_ref<'a>(&'a self, original: &'a T) -> &'a T {
         match self {
             Self::Substring(ofs, len) => &original[*ofs..*ofs + *len],
-            Self::Owned(s) => s,
+            Self::Owned(s) => s.borrow(),
         }
     }
 
-    pub fn into_cow(self, original: Cow<'_, str>) -> Cow<'_, str> {
+    pub fn into_cow(self, original: Cow<'_, T>) -> Cow<'_, T> {
         match self {
             Self::Owned(s) => Cow::Owned(s),
             Self::Substring(ofs, len) => {
-                if ofs == 0 && len == original.len() {
+                if ofs == 0 && len == original.as_byte_slice().len() {
                     original
                 } else if let Cow::Borrowed(s) = original {
                     Cow::Borrowed(&s[ofs..ofs + len])
@@ -102,11 +167,42 @@ impl SubstringOrOwned {
 mod tests {
     use alloc::borrow::Cow;
     use alloc::string::ToString;
+    use alloc::vec;
 
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{SubstringOrOwned, cow};
+    use super::{SubstringOrOwned, cow, str_cow_to_bytes};
+
+    // --- str_cow_to_bytes ---
+
+    #[test]
+    fn str_cow_to_bytes_borrowed() {
+        let input = Cow::Borrowed("hello");
+        let result = str_cow_to_bytes(input);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.as_ref(), b"hello");
+    }
+
+    #[test]
+    fn str_cow_to_bytes_owned() {
+        let input = Cow::Owned("hello".to_string());
+        let result = str_cow_to_bytes(input);
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.as_ref(), b"hello");
+    }
+
+    #[test]
+    fn str_cow_to_bytes_empty() {
+        let result = str_cow_to_bytes(Cow::Borrowed(""));
+        assert_eq!(result.as_ref(), b"");
+    }
+
+    #[test]
+    fn str_cow_to_bytes_multibyte() {
+        let result = str_cow_to_bytes(Cow::Borrowed("é"));
+        assert_eq!(result.as_ref(), "é".as_bytes());
+    }
 
     // --- cow ---
 
@@ -255,81 +351,168 @@ mod tests {
         assert!(matches!(result, Cow::Borrowed(_)));
     }
 
-    // --- SubstringOrOwned ---
+    // --- SubstringOrOwned<str> ---
 
     #[test]
-    fn soo_new_substring() {
+    fn soo_str_new_substring() {
         let original = "hello world";
-        let soo = SubstringOrOwned::new(&original[6..], original);
+        let soo = SubstringOrOwned::<str>::new(&original[6..], original);
         assert!(matches!(soo, SubstringOrOwned::Substring(6, 5)));
-        assert_eq!(soo.as_str(original), "world");
+        assert_eq!(soo.as_ref(original), "world");
     }
 
     #[test]
-    fn soo_new_full() {
+    fn soo_str_new_full() {
         let original = "hello";
-        let soo = SubstringOrOwned::new(original, original);
+        let soo = SubstringOrOwned::<str>::new(original, original);
         assert!(matches!(soo, SubstringOrOwned::Substring(0, 5)));
-        assert_eq!(soo.as_str(original), "hello");
+        assert_eq!(soo.as_ref(original), "hello");
     }
 
     #[test]
-    fn soo_new_not_in_parent() {
+    fn soo_str_new_not_in_parent() {
         let original = "hello";
-        let soo = SubstringOrOwned::new("xyz", original);
+        let soo = SubstringOrOwned::<str>::new("xyz", original);
         assert!(matches!(soo, SubstringOrOwned::Owned(_)));
-        assert_eq!(soo.as_str(original), "xyz");
+        assert_eq!(soo.as_ref(original), "xyz");
     }
 
     #[test]
-    fn soo_new_different_allocation_content_matches() {
+    fn soo_str_new_different_allocation_content_matches() {
         let original = "hello";
         let other = "hello".to_string();
-        let soo = SubstringOrOwned::new(&other, original);
+        let soo = SubstringOrOwned::<str>::new(&other, original);
         assert!(matches!(soo, SubstringOrOwned::Substring(0, 5)));
-        assert_eq!(soo.as_str(original), "hello");
+        assert_eq!(soo.as_ref(original), "hello");
     }
 
     #[test]
-    fn soo_new_content_is_substring_of_parent() {
+    fn soo_str_new_content_is_substring_of_parent() {
         let original = "hello world";
         let other = "world".to_string();
-        let soo = SubstringOrOwned::new(&other, original);
+        let soo = SubstringOrOwned::<str>::new(&other, original);
         assert!(matches!(soo, SubstringOrOwned::Substring(6, 5)));
-        assert_eq!(soo.as_str(original), "world");
+        assert_eq!(soo.as_ref(original), "world");
     }
 
     #[test]
-    fn soo_into_cow_owned() {
-        let soo = SubstringOrOwned::Owned("world".to_string());
+    fn soo_str_into_cow_owned() {
+        let soo = SubstringOrOwned::<str>::Owned("world".to_string());
         let result = soo.into_cow(Cow::Borrowed("hello"));
         assert!(matches!(result, Cow::Owned(_)));
         assert_eq!(result, "world");
     }
 
     #[test]
-    fn soo_into_cow_substring_full_borrowed() {
+    fn soo_str_into_cow_substring_full_borrowed() {
         let original = "hello";
-        let soo = SubstringOrOwned::Substring(0, 5);
+        let soo = SubstringOrOwned::<str>::Substring(0, 5);
         let result = soo.into_cow(Cow::Borrowed(original));
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "hello");
     }
 
     #[test]
-    fn soo_into_cow_substring_partial_borrowed() {
+    fn soo_str_into_cow_substring_partial_borrowed() {
         let original = "hello world";
-        let soo = SubstringOrOwned::Substring(6, 5);
+        let soo = SubstringOrOwned::<str>::Substring(6, 5);
         let result = soo.into_cow(Cow::Borrowed(original));
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "world");
     }
 
     #[test]
-    fn soo_into_cow_substring_from_owned_parent() {
-        let soo = SubstringOrOwned::Substring(6, 5);
+    fn soo_str_into_cow_substring_from_owned_parent() {
+        let soo = SubstringOrOwned::<str>::Substring(6, 5);
         let result = soo.into_cow(Cow::Owned("hello world".to_string()));
         assert!(matches!(result, Cow::Owned(_)));
         assert_eq!(result, "world");
+    }
+
+    // --- SubstringOrOwned<[u8]> ---
+
+    #[test]
+    fn soo_bytes_new_substring() {
+        let original: &[u8] = b"hello world";
+        let soo = SubstringOrOwned::<[u8]>::new(&original[6..], original);
+        assert!(matches!(soo, SubstringOrOwned::Substring(6, 5)));
+        assert_eq!(soo.as_ref(original), b"world");
+    }
+
+    #[test]
+    fn soo_bytes_new_full() {
+        let original: &[u8] = b"hello";
+        let soo = SubstringOrOwned::<[u8]>::new(original, original);
+        assert!(matches!(soo, SubstringOrOwned::Substring(0, 5)));
+        assert_eq!(soo.as_ref(original), b"hello");
+    }
+
+    #[test]
+    fn soo_bytes_new_not_in_parent() {
+        let original: &[u8] = b"hello";
+        let soo = SubstringOrOwned::<[u8]>::new(b"xyz", original);
+        assert!(matches!(soo, SubstringOrOwned::Owned(_)));
+        assert_eq!(soo.as_ref(original), b"xyz");
+    }
+
+    #[test]
+    fn soo_bytes_new_content_matches() {
+        let original: &[u8] = b"hello world";
+        let other = b"world".to_vec();
+        let soo = SubstringOrOwned::<[u8]>::new(&other, original);
+        assert!(matches!(soo, SubstringOrOwned::Substring(6, 5)));
+        assert_eq!(soo.as_ref(original), b"world");
+    }
+
+    #[test]
+    fn soo_bytes_into_cow_owned() {
+        let soo = SubstringOrOwned::<[u8]>::Owned(vec![1, 2, 3]);
+        let result = soo.into_cow(Cow::Borrowed(b"hello" as &[u8]));
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.as_ref(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn soo_bytes_into_cow_substring_full_borrowed() {
+        let original: &[u8] = b"hello";
+        let soo = SubstringOrOwned::<[u8]>::Substring(0, 5);
+        let result = soo.into_cow(Cow::Borrowed(original));
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.as_ref(), b"hello");
+    }
+
+    #[test]
+    fn soo_bytes_into_cow_substring_partial_borrowed() {
+        let original: &[u8] = b"hello world";
+        let soo = SubstringOrOwned::<[u8]>::Substring(6, 5);
+        let result = soo.into_cow(Cow::Borrowed(original));
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.as_ref(), b"world");
+    }
+
+    #[test]
+    fn soo_bytes_into_cow_substring_from_owned_parent() {
+        let soo = SubstringOrOwned::<[u8]>::Substring(6, 5);
+        let result = soo.into_cow(Cow::Owned(b"hello world".to_vec()));
+        assert!(matches!(result, Cow::Owned(_)));
+        assert_eq!(result.as_ref(), b"world");
+    }
+
+    #[test]
+    fn soo_bytes_is_identity() {
+        let original: &[u8] = b"hello";
+        let soo = SubstringOrOwned::<[u8]>::Substring(0, 5);
+        assert!(soo.is_identity(original));
+        let soo2 = SubstringOrOwned::<[u8]>::Substring(1, 4);
+        assert!(!soo2.is_identity(original));
+    }
+
+    #[test]
+    fn soo_str_is_identity() {
+        let original = "hello";
+        let soo = SubstringOrOwned::<str>::Substring(0, 5);
+        assert!(soo.is_identity(original));
+        let soo2 = SubstringOrOwned::<str>::Substring(1, 4);
+        assert!(!soo2.is_identity(original));
     }
 }
