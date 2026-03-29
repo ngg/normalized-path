@@ -23,7 +23,7 @@ maintenance = { status = "experimental" }
 
 [features]
 default = ["std"]
-std = ["thiserror/std"]
+std = ["thiserror/std", "simd_cesu8/std"]
 jni = ["std", "dep:jni"]
 __test = []
 
@@ -34,6 +34,7 @@ icu_normalizer = { version = "~2.1.0", default-features = false, features = ["co
 icu_properties = { version = "~2.1.0", default-features = false, features = ["compiled_data"] }
 jni = { version = "0.22.2", optional = true }
 memchr = { version = "2.0.0", default-features = false }
+simd_cesu8 = { version = "1.0.0", default-features = false }
 thiserror = { version = "2.0.0", default-features = false }
 
 [target.'cfg(target_vendor = "apple")'.dependencies]

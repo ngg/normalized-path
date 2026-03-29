@@ -4,6 +4,21 @@ use alloc::string::String;
 use core::borrow::Borrow;
 use core::ops::{Index, Range};
 
+#[cfg(any(
+    not(any(target_os = "windows", target_vendor = "apple")),
+    test,
+    feature = "__test"
+))]
+#[must_use]
+pub fn to_java_modified_utf8(s: &str) -> Cow<'_, [u8]> {
+    simd_cesu8::encode(s)
+}
+
+#[must_use]
+pub fn decode_utf8_lossy(bytes: &[u8]) -> Cow<'_, str> {
+    simd_cesu8::decode(bytes).unwrap_or_else(|_| String::from_utf8_lossy(bytes))
+}
+
 /// Trait abstracting over `str` and `[u8]` for [`SubstringOrOwned`].
 pub trait Segment: ToOwned + Index<Range<usize>, Output = Self> {
     fn as_byte_slice(&self) -> &[u8];
@@ -28,182 +43,6 @@ impl Segment for [u8] {
     fn find_subslice(&self, needle: &[u8]) -> Option<usize> {
         memchr::memmem::find(self, needle)
     }
-}
-
-fn decode_cesu8_pair(bytes: &[u8], i: usize, high: u32) -> Option<(char, usize)> {
-    if i + 5 < bytes.len()
-        && bytes[i + 3] & 0xF0 == 0xE0
-        && bytes[i + 4] & 0xC0 == 0x80
-        && bytes[i + 5] & 0xC0 == 0x80
-    {
-        let low = u32::from(bytes[i + 3] & 0x0F) << 12
-            | u32::from(bytes[i + 4] & 0x3F) << 6
-            | u32::from(bytes[i + 5] & 0x3F);
-        if (0xDC00..=0xDFFF).contains(&low) {
-            let supplementary = 0x10000 + ((high - 0xD800) << 10) + (low - 0xDC00);
-            return char::from_u32(supplementary).map(|c| (c, 6));
-        }
-    }
-    None
-}
-
-#[cfg(any(
-    not(any(target_os = "windows", target_vendor = "apple")),
-    test,
-    feature = "__test"
-))]
-#[must_use]
-#[allow(clippy::cast_possible_truncation)]
-pub fn to_java_modified_utf8(s: &str) -> Cow<'_, [u8]> {
-    let needs_encoding = s.as_bytes().contains(&0) || s.chars().any(|c| c as u32 > 0xFFFF);
-    if !needs_encoding {
-        return Cow::Borrowed(s.as_bytes());
-    }
-
-    let mut out = alloc::vec::Vec::with_capacity(s.len());
-    for c in s.chars() {
-        let cp = c as u32;
-        if cp == 0 {
-            // Null → overlong 2-byte encoding
-            out.extend_from_slice(&[0xC0, 0x80]);
-        } else if cp <= 0x7F {
-            out.push(cp as u8);
-        } else if cp <= 0x7FF {
-            out.push(0xC0 | (cp >> 6) as u8);
-            out.push(0x80 | (cp & 0x3F) as u8);
-        } else if cp <= 0xFFFF {
-            out.push(0xE0 | (cp >> 12) as u8);
-            out.push(0x80 | ((cp >> 6) & 0x3F) as u8);
-            out.push(0x80 | (cp & 0x3F) as u8);
-        } else {
-            // Supplementary character → CESU-8 surrogate pair
-            let high = 0xD800 + ((cp - 0x10000) >> 10);
-            let low = 0xDC00 + ((cp - 0x10000) & 0x3FF);
-            out.push(0xE0 | (high >> 12) as u8);
-            out.push(0x80 | ((high >> 6) & 0x3F) as u8);
-            out.push(0x80 | (high & 0x3F) as u8);
-            out.push(0xE0 | (low >> 12) as u8);
-            out.push(0x80 | ((low >> 6) & 0x3F) as u8);
-            out.push(0x80 | (low & 0x3F) as u8);
-        }
-    }
-    Cow::Owned(out)
-}
-
-#[must_use]
-pub fn decode_utf8_lossy(bytes: &[u8]) -> Cow<'_, str> {
-    // Fast path: if valid UTF-8, borrow directly.
-    if let Ok(s) = core::str::from_utf8(bytes) {
-        return Cow::Borrowed(s);
-    }
-
-    let mut out = String::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        let b = bytes[i];
-
-        // ASCII: single byte
-        if b < 0x80 {
-            out.push(b as char);
-            i += 1;
-            continue;
-        }
-
-        // Overlong null: 0xC0 0x80 → U+0000
-        if b == 0xC0 && i + 1 < bytes.len() && bytes[i + 1] == 0x80 {
-            out.push('\0');
-            i += 2;
-            continue;
-        }
-
-        // 2-byte sequence: 110xxxxx 10xxxxxx
-        if b & 0xE0 == 0xC0 && i + 1 < bytes.len() && bytes[i + 1] & 0xC0 == 0x80 {
-            let cp = u32::from(b & 0x1F) << 6 | u32::from(bytes[i + 1] & 0x3F);
-            // Reject other overlong encodings (< 0x80)
-            if cp >= 0x80 {
-                if let Some(c) = char::from_u32(cp) {
-                    out.push(c);
-                    i += 2;
-                    continue;
-                }
-            }
-            out.push('\u{FFFD}');
-            i += 1;
-            continue;
-        }
-
-        // 3-byte sequence: 1110xxxx 10xxxxxx 10xxxxxx
-        if b & 0xF0 == 0xE0
-            && i + 2 < bytes.len()
-            && bytes[i + 1] & 0xC0 == 0x80
-            && bytes[i + 2] & 0xC0 == 0x80
-        {
-            let cp = u32::from(b & 0x0F) << 12
-                | u32::from(bytes[i + 1] & 0x3F) << 6
-                | u32::from(bytes[i + 2] & 0x3F);
-
-            // Check for CESU-8 high surrogate (U+D800..U+DBFF) followed by low surrogate
-            if (0xD800..=0xDBFF).contains(&cp) {
-                if let Some((c, len)) = decode_cesu8_pair(bytes, i, cp) {
-                    out.push(c);
-                    i += len;
-                    continue;
-                }
-                // Lone high surrogate — replace
-                out.push('\u{FFFD}');
-                i += 3;
-                continue;
-            }
-
-            // Lone low surrogate
-            if (0xDC00..=0xDFFF).contains(&cp) {
-                out.push('\u{FFFD}');
-                i += 3;
-                continue;
-            }
-
-            // Reject overlong 3-byte (< 0x800)
-            if cp >= 0x800 {
-                if let Some(c) = char::from_u32(cp) {
-                    out.push(c);
-                    i += 3;
-                    continue;
-                }
-            }
-            out.push('\u{FFFD}');
-            i += 1;
-            continue;
-        }
-
-        // 4-byte sequence: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
-        if b & 0xF8 == 0xF0
-            && i + 3 < bytes.len()
-            && bytes[i + 1] & 0xC0 == 0x80
-            && bytes[i + 2] & 0xC0 == 0x80
-            && bytes[i + 3] & 0xC0 == 0x80
-        {
-            let cp = u32::from(b & 0x07) << 18
-                | u32::from(bytes[i + 1] & 0x3F) << 12
-                | u32::from(bytes[i + 2] & 0x3F) << 6
-                | u32::from(bytes[i + 3] & 0x3F);
-            // Reject overlong (< 0x10000) and out-of-range (> 0x10FFFF)
-            if cp >= 0x10000 {
-                if let Some(c) = char::from_u32(cp) {
-                    out.push(c);
-                    i += 4;
-                    continue;
-                }
-            }
-            out.push('\u{FFFD}');
-            i += 1;
-            continue;
-        }
-
-        // Invalid leading byte
-        out.push('\u{FFFD}');
-        i += 1;
-    }
-    Cow::Owned(out)
 }
 
 /// Convert a `Cow<str>` to `Cow<[u8]>` without copying when possible.
@@ -727,16 +566,16 @@ mod tests {
 
     #[test]
     fn decode_lossy_overlong_null() {
-        // 0xC0 0x80 → U+0000 (null byte)
+        // 0xC0 0x80 is an overlong encoding, replaced with U+FFFD per byte
         let result = decode_utf8_lossy(&[0xC0, 0x80]);
-        assert_eq!(result, "\0");
+        assert_eq!(result, "\u{FFFD}\u{FFFD}");
     }
 
     #[test]
     fn decode_lossy_overlong_null_in_context() {
-        // "a" + overlong null + "b"
+        // "a" + overlong null + "b" — overlong replaced per byte
         let result = decode_utf8_lossy(&[0x61, 0xC0, 0x80, 0x62]);
-        assert_eq!(result, "a\0b");
+        assert_eq!(result, "a\u{FFFD}\u{FFFD}b");
     }
 
     #[test]
@@ -765,23 +604,23 @@ mod tests {
 
     #[test]
     fn decode_lossy_lone_high_surrogate() {
-        // High surrogate U+D800 without low surrogate → U+FFFD
+        // High surrogate U+D800 without low surrogate — each byte replaced
         let result = decode_utf8_lossy(&[0xED, 0xA0, 0x80, 0x61]);
-        assert_eq!(result, "\u{FFFD}a");
+        assert_eq!(result, "\u{FFFD}\u{FFFD}\u{FFFD}a");
     }
 
     #[test]
     fn decode_lossy_lone_low_surrogate() {
-        // Low surrogate U+DC00 without high surrogate → U+FFFD
+        // Low surrogate U+DC00 without high surrogate — each byte replaced
         let result = decode_utf8_lossy(&[0xED, 0xB0, 0x80]);
-        assert_eq!(result, "\u{FFFD}");
+        assert_eq!(result, "\u{FFFD}\u{FFFD}\u{FFFD}");
     }
 
     #[test]
     fn decode_lossy_high_surrogate_followed_by_non_surrogate() {
         // High surrogate followed by regular 3-byte char, not low surrogate
         let result = decode_utf8_lossy(&[0xED, 0xA0, 0x80, 0xE3, 0x81, 0x82]);
-        assert_eq!(result, "\u{FFFD}あ");
+        assert_eq!(result, "\u{FFFD}\u{FFFD}\u{FFFD}あ");
     }
 
     #[test]
@@ -792,7 +631,7 @@ mod tests {
 
     #[test]
     fn decode_lossy_invalid_continuation() {
-        // 0xC3 without valid continuation
+        // 0xC3 without valid continuation — leader replaced, null passes through
         let result = decode_utf8_lossy(&[0xC3, 0x00]);
         assert_eq!(result, "\u{FFFD}\0");
     }
@@ -820,74 +659,94 @@ mod tests {
 
     #[test]
     fn decode_lossy_truncated_3byte() {
-        // 0xE3 0x81 at end of input
+        // 0xE3 0x81 at end of input — single replacement per from_utf8_lossy
         let result = decode_utf8_lossy(&[0x61, 0xE3, 0x81]);
-        assert_eq!(result, "a\u{FFFD}\u{FFFD}");
+        assert_eq!(result, "a\u{FFFD}");
     }
 
     #[test]
     fn decode_lossy_truncated_4byte() {
-        // 0xF0 0x9F 0x98 at end of input
+        // 0xF0 0x9F 0x98 at end of input — single replacement per from_utf8_lossy
         let result = decode_utf8_lossy(&[0x61, 0xF0, 0x9F, 0x98]);
-        assert_eq!(result, "a\u{FFFD}\u{FFFD}\u{FFFD}");
+        assert_eq!(result, "a\u{FFFD}");
     }
 
     #[test]
-    fn decode_lossy_mixed() {
-        // Valid ASCII + overlong null + valid multibyte + CESU-8 pair + invalid + valid
-        let mut input = vec![0x61]; // 'a'
-        input.extend_from_slice(&[0xC0, 0x80]); // overlong null
-        input.extend_from_slice("é".as_bytes()); // valid 2-byte
-        input.extend_from_slice(&[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]); // 😀 as CESU-8
+    fn decode_lossy_mixed_invalid_with_cesu8() {
+        // CESU-8 pair + invalid byte: simd_cesu8::decode fails (invalid byte),
+        // falls back to from_utf8_lossy which replaces the surrogate pair bytes too.
+        let mut input = vec![0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]; // 😀 as CESU-8
         input.push(0xFF); // invalid
+        let result = decode_utf8_lossy(&input);
+        // from_utf8_lossy doesn't understand CESU-8 — all bytes invalid
+        assert_eq!(result, "\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}");
+    }
+
+    #[test]
+    fn decode_lossy_pure_cesu8() {
+        // Pure CESU-8 without invalid bytes — simd_cesu8::decode succeeds
+        let mut input = vec![0x61]; // 'a'
+        input.extend_from_slice(&[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]); // 😀 as CESU-8
         input.push(0x62); // 'b'
         let result = decode_utf8_lossy(&input);
-        assert_eq!(result, "a\0é😀\u{FFFD}b");
+        assert_eq!(result, "a😀b");
+    }
+
+    #[test]
+    fn decode_lossy_utf8_emoji_plus_invalid() {
+        // Valid UTF-8 emoji (4 bytes) + invalid byte: simd_cesu8::decode fails,
+        // falls back to from_utf8_lossy which preserves the emoji.
+        let mut input = "😀".as_bytes().to_vec();
+        input.push(0xFF);
+        let result = decode_utf8_lossy(&input);
+        assert_eq!(result, "😀\u{FFFD}");
     }
 
     // --- to_java_modified_utf8 ---
 
     #[test]
-    fn mutf8_ascii_borrows() {
+    fn cesu8_ascii_borrows() {
         let result = to_java_modified_utf8("hello");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result.as_ref(), b"hello");
     }
 
     #[test]
-    fn mutf8_empty_borrows() {
+    fn cesu8_empty_borrows() {
         let result = to_java_modified_utf8("");
         assert!(matches!(result, Cow::Borrowed(_)));
     }
 
     #[test]
-    fn mutf8_bmp_borrows() {
+    fn cesu8_bmp_borrows() {
         let result = to_java_modified_utf8("éàü");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result.as_ref(), "éàü".as_bytes());
     }
 
     #[test]
-    fn mutf8_null_encoded() {
+    fn cesu8_null_passthrough() {
         let result = to_java_modified_utf8("\0");
-        assert_eq!(result.as_ref(), &[0xC0, 0x80]);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.as_ref(), &[0x00]);
     }
 
     #[test]
-    fn mutf8_null_in_context() {
+    fn cesu8_null_in_context() {
         let result = to_java_modified_utf8("a\0b");
-        assert_eq!(result.as_ref(), &[0x61, 0xC0, 0x80, 0x62]);
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result.as_ref(), &[0x61, 0x00, 0x62]);
     }
 
     #[test]
-    fn mutf8_supplementary_as_surrogate_pair() {
+    fn cesu8_supplementary_as_surrogate_pair() {
         // U+1F600 (😀) → surrogate pair U+D83D U+DE00
         let result = to_java_modified_utf8("😀");
         assert_eq!(result.as_ref(), &[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]);
     }
 
     #[test]
-    fn mutf8_supplementary_in_context() {
+    fn cesu8_supplementary_in_context() {
         let result = to_java_modified_utf8("hi😀!");
         let mut expected = vec![0x68, 0x69]; // "hi"
         expected.extend_from_slice(&[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]); // 😀
@@ -896,14 +755,14 @@ mod tests {
     }
 
     #[test]
-    fn mutf8_u10000() {
+    fn cesu8_u10000() {
         // U+10000 → surrogates U+D800 U+DC00
         let result = to_java_modified_utf8("\u{10000}");
         assert_eq!(result.as_ref(), &[0xED, 0xA0, 0x80, 0xED, 0xB0, 0x80]);
     }
 
     #[test]
-    fn mutf8_roundtrip_with_decode() {
+    fn cesu8_roundtrip_with_decode() {
         for s in &["hello", "a\0b", "😀", "\u{10000}", "hi😀\0world"] {
             let encoded = to_java_modified_utf8(s);
             let decoded = decode_utf8_lossy(&encoded);

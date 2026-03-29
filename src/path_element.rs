@@ -1363,7 +1363,7 @@ mod tests {
             // Unpaired surrogate U+D800 encodes as 3 WTF-8 bytes, each replaced by U+FFFD
             let input = OsString::from_wide(&[0x68, 0xD800, 0x69]);
             let pe = PathElementCS::from_os_str(input.as_os_str()).unwrap();
-            assert_eq!(pe.original(), "h\u{FFFD}i");
+            assert_eq!(pe.original(), "h\u{FFFD}\u{FFFD}\u{FFFD}i");
         }
 
         #[cfg(windows)]
@@ -1372,7 +1372,7 @@ mod tests {
             use std::os::windows::ffi::OsStringExt;
             let input = OsString::from_wide(&[0x68, 0xD800, 0x69]);
             let pe = PathElementCS::from_os_str(input).unwrap();
-            assert_eq!(pe.original(), "h\u{FFFD}i");
+            assert_eq!(pe.original(), "h\u{FFFD}\u{FFFD}\u{FFFD}i");
         }
 
         // CI "H\tllo": original="H\tllo", os_compatible="H␉llo", normalized="h␉llo"
@@ -1602,11 +1602,11 @@ mod tests {
 
         #[test]
         fn from_bytes_overlong_null() {
-            // 0xC0 0x80 (Modified UTF-8 null) → U+0000, which is then rejected
-            // because names containing null bytes are invalid.
-            let input: &[u8] = &[0x61, 0xC0, 0x80, 0x62]; // "a" + overlong null + "b"
-            let err = PathElementCS::from_bytes(input).unwrap_err();
-            assert!(matches!(err, crate::Error::ContainsNullByte));
+            // 0xC0 0x80 is an overlong encoding — replaced with U+FFFD per byte,
+            // not decoded as null.
+            let input: &[u8] = &[0x61, 0xC0, 0x80, 0x62]; // "a" + overlong + "b"
+            let pe = PathElementCS::from_bytes(input).unwrap();
+            assert_eq!(pe.original(), "a\u{FFFD}\u{FFFD}b");
         }
 
         #[test]
@@ -1642,18 +1642,18 @@ mod tests {
 
         #[test]
         fn from_bytes_lone_high_surrogate_replaced() {
-            // ED A0 80 (high surrogate U+D800 without low) → U+FFFD
+            // ED A0 80 (high surrogate U+D800 without low) — each byte replaced
             let input: &[u8] = &[0x61, 0xED, 0xA0, 0x80, 0x62]; // "a" + lone high + "b"
             let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "a\u{FFFD}b");
+            assert_eq!(pe.original(), "a\u{FFFD}\u{FFFD}\u{FFFD}b");
         }
 
         #[test]
         fn from_bytes_lone_low_surrogate_replaced() {
-            // ED B0 80 (low surrogate U+DC00 without high) → U+FFFD
+            // ED B0 80 (low surrogate U+DC00 without high) — each byte replaced
             let input: &[u8] = &[0x61, 0xED, 0xB0, 0x80, 0x62]; // "a" + lone low + "b"
             let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "a\u{FFFD}b");
+            assert_eq!(pe.original(), "a\u{FFFD}\u{FFFD}\u{FFFD}b");
         }
 
         #[test]
@@ -1668,20 +1668,21 @@ mod tests {
 
         #[test]
         fn from_bytes_overlong_null_only() {
-            // Just the overlong null — decodes to "\0" which is rejected.
+            // 0xC0 0x80 is an overlong encoding — each byte replaced with U+FFFD.
             let input: &[u8] = &[0xC0, 0x80];
-            let err = PathElementCS::from_bytes(input).unwrap_err();
-            assert!(matches!(err, crate::Error::ContainsNullByte));
+            let pe = PathElementCS::from_bytes(input).unwrap();
+            assert_eq!(pe.original(), "\u{FFFD}\u{FFFD}");
         }
 
         #[test]
         fn from_bytes_mixed_cesu8_and_invalid() {
-            // Valid ASCII + CESU-8 emoji + invalid byte
+            // Valid ASCII + CESU-8 emoji + invalid byte: simd_cesu8::decode fails,
+            // falls back to from_utf8_lossy which replaces surrogate pair bytes too.
             let mut input = b"hi".to_vec();
             input.extend_from_slice(&[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]); // 😀
             input.push(0xFF); // invalid
             let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "hi😀\u{FFFD}");
+            assert_eq!(pe.original(), "hi\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}");
         }
     }
 

@@ -56,17 +56,25 @@
 //! When constructing from bytes (`from_bytes`, `from_os_str`), an additional
 //! decoding step is applied first:
 //!
-//! 0. **Byte decoding** -- the input bytes are decoded to UTF-8 with Modified
-//!    UTF-8 / CESU-8 awareness: the overlong encoding `0xC0 0x80` is decoded as
-//!    a null byte (U+0000), and CESU-8 surrogate pairs are decoded as the
-//!    corresponding supplementary character.  All other invalid byte sequences
-//!    are replaced with U+FFFD (invalid byte sequences can be encountered on
-//!    Unix filesystems, which allow arbitrary bytes except `/` and `\0` in names, and on
-//!    Windows, where filenames are WTF-16 and may contain unpaired surrogates).
-//!    The Modified UTF-8 handling is needed because older Android versions
-//!    used Java's Modified UTF-8 for filesystem paths, encoding null as
-//!    `0xC0 0x80` and supplementary characters as CESU-8 surrogate pairs.
-//!    When constructing from a string (`new`), this step is skipped.
+//! 0. **Byte decoding** -- the input bytes are decoded to a string in three
+//!    stages:
+//!
+//!    1. **UTF-8** -- if the input is valid UTF-8, it is used as-is.
+//!    2. **CESU-8** -- otherwise, CESU-8 decoding is attempted, which accepts
+//!       surrogate pairs and decodes them as the corresponding supplementary
+//!       character.
+//!    3. **Lossy UTF-8** -- if CESU-8 decoding also fails (e.g. because the
+//!       input contains a mix of valid and invalid bytes), [`String::from_utf8_lossy()`]
+//!       is used, which preserves valid UTF-8 sequences and replaces invalid
+//!       bytes with U+FFFD.
+//!
+//!    Invalid bytes can be encountered on Unix filesystems, which allow
+//!    arbitrary bytes except `/` and `\0` in names, and on Windows, where
+//!    filenames are WTF-16 and may contain unpaired surrogates.  The CESU-8
+//!    handling is needed because older Android versions used Java's Modified
+//!    UTF-8 for filesystem paths, encoding supplementary characters as CESU-8
+//!    surrogate pairs.
+//!    When constructing from a string ([`PathElementCS::new()`]), this step is skipped.
 //!
 //! 1. **NFD decomposition** -- canonical decomposition to reorder combining marks.
 //!    This is needed because macOS stores filenames in a form close to NFD, so an
