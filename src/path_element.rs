@@ -830,6 +830,8 @@ mod tests {
         assert!(PathElementCS::new(".").is_err());
         assert!(PathElementCS::new("..").is_err());
         assert!(PathElementCS::new("a/b").is_err());
+        assert!(PathElementCS::new("\0").is_err());
+        assert!(PathElementCS::new("a\0b").is_err());
     }
 
     // --- PartialEq / Eq ---

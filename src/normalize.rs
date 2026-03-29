@@ -69,11 +69,12 @@ pub fn map_turkish_i(s: &str) -> Cow<'_, str> {
 }
 
 /// Map control characters to Unicode Control Pictures.
-/// 0x00-0x1F → U+2400-U+241F, 0x7F → U+2421.
+/// 0x01-0x1F → U+2401-U+241F, 0x7F → U+2421.
+/// Null bytes (0x00) are excluded — they are rejected by validation instead.
 pub fn map_control_chars(s: &str) -> Cow<'_, str> {
     cow(
         s.chars().map(|c| match c {
-            '\x00'..='\x1F' => char::from_u32(c as u32 + 0x2400).unwrap_or(c),
+            '\x01'..='\x1F' => char::from_u32(c as u32 + 0x2400).unwrap_or(c),
             '\x7F' => '\u{2421}',
             _ => c,
         }),
@@ -111,12 +112,13 @@ pub fn normalize_ci_from_normalized_cs(cs_normalized: &str) -> Cow<'_, str> {
 
 /// Validate a normalized path element name.
 ///
-/// Rejects empty strings, `.`, `..`, and names containing `/`.
+/// Rejects empty strings, `.`, `..`, names containing `/`, and names containing `\0`.
 pub fn validate_path_element(name: &str) -> Result<()> {
     match name {
         "" => Err(Error::Empty),
         "." => Err(Error::CurrentDirectoryMarker),
         ".." => Err(Error::ParentDirectoryMarker),
+        _ if name.contains('\0') => Err(Error::ContainsNullByte),
         _ if name.contains('/') => Err(Error::ContainsForwardSlash),
         _ => Ok(()),
     }
@@ -134,6 +136,7 @@ mod tests {
         map_control_chars, map_fullwidth, map_turkish_i, normalize_ci_from_normalized_cs,
         normalize_cs, trim_whitespace_like, validate_path_element,
     };
+    use crate::Error;
     // --- trim_whitespace_like ---
 
     #[test]
@@ -291,13 +294,18 @@ mod tests {
 
     #[test]
     fn map_control_mixed() {
-        assert_eq!(map_control_chars("a\x00b\x7Fc"), "a\u{2400}b\u{2421}c");
+        assert_eq!(map_control_chars("a\x01b\x7Fc"), "a\u{2401}b\u{2421}c");
+    }
+
+    #[test]
+    fn map_control_null_byte_unchanged() {
+        assert_eq!(map_control_chars("\x00"), "\x00");
     }
 
     #[test]
     fn map_control_all_c0_characters() {
-        let controls: String = ('\x00'..='\x1F').collect();
-        let pictures: String = ('\u{2400}'..='\u{241F}').collect();
+        let controls: String = ('\x01'..='\x1F').collect();
+        let pictures: String = ('\u{2401}'..='\u{241F}').collect();
         assert_eq!(map_control_chars(&controls), pictures);
     }
 
@@ -636,7 +644,24 @@ mod tests {
         assert!(validate_path_element("日本語.txt").is_ok());
     }
 
+    #[test]
+    fn validate_null_byte_rejected() {
+        assert!(matches!(
+            validate_path_element("\0"),
+            Err(Error::ContainsNullByte)
+        ));
+        assert!(matches!(
+            validate_path_element("a\0b"),
+            Err(Error::ContainsNullByte)
+        ));
+    }
+
     // --- normalize_cs ---
+
+    #[test]
+    fn normalize_cs_null_byte_rejected() {
+        assert!(matches!(normalize_cs("a\0b"), Err(Error::ContainsNullByte)));
+    }
 
     #[test]
     fn normalize_sensitive_preserves_case() {

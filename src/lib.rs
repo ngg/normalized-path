@@ -21,6 +21,9 @@
 //! - Every valid name is representable on every supported OS.  Characters that
 //!   would be rejected or silently altered (Windows forbidden characters, C0 controls)
 //!   are mapped to visually similar safe alternatives.
+//! - If the OS automatically transforms a name (e.g. NFC↔NFD conversion,
+//!   truncation at null bytes), normalizing the transformed name produces the
+//!   same result as normalizing the original.
 //! - In case-insensitive mode, names differing only in case normalize identically,
 //!   with correct handling of edge cases like Turkish dotted/dotless I.
 //!
@@ -69,14 +72,15 @@
 //!    maps certain ASCII characters to fullwidth to avoid Windows restrictions.  This
 //!    step ensures that the OS-compatible form normalizes back to the same value.
 //!
-//! 4. **Control character mapping** -- maps C0 controls (U+0000--U+001F) and DEL (U+007F)
-//!    to their Unicode Control Picture equivalents (U+2400--U+241F, U+2421).  Control
+//! 4. **Control character mapping** -- maps C0 controls (U+0001--U+001F) and DEL (U+007F)
+//!    to their Unicode Control Picture equivalents (U+2401--U+241F, U+2421).  Control
 //!    characters are invisible, can break terminals and tools, and some OSes reject
 //!    or silently drop them.  Mapping to visible Control Pictures preserves the
-//!    information while making the name safe.
+//!    information while making the name safe.  (Null bytes are excluded — see step 5.)
 //!
-//! 5. **Validation** -- rejects empty strings, `.`, `..`, and names containing `/`.
-//!    These are universally special on all OSes and cannot be used as regular names.
+//! 5. **Validation** -- rejects empty strings, `.`, `..`, names containing `/`, and
+//!    names containing null bytes (`\0`).  These are universally special on all OSes
+//!    and cannot be used as regular names.
 //!
 //! 6. **NFC composition** -- canonical composition to produce the shortest equivalent
 //!    form.
@@ -254,6 +258,11 @@ pub enum Error {
     /// The name contains a forward slash (`/`), which is a path separator.
     #[error("contains forward slash")]
     ContainsForwardSlash,
+
+    /// The name contains a null byte (`\0`), which all OSes treat as a string
+    /// terminator, silently truncating the name.
+    #[error("contains null byte")]
+    ContainsNullByte,
 
     /// An OS-level operation failed (e.g., Apple's `CFStringGetFileSystemRepresentation`).
     #[error("OS error")]
