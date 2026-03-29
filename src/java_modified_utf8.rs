@@ -100,6 +100,7 @@ pub fn encode_os_utf8(s: Cow<'_, str>) -> Cow<'_, [u8]> {
 #[cfg(test)]
 mod tests {
     use alloc::borrow::Cow;
+    use alloc::vec;
 
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
