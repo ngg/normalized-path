@@ -1,6 +1,8 @@
 use alloc::borrow::Cow;
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
 use alloc::format;
+#[cfg(any(target_vendor = "apple", test, feature = "__test"))]
+use alloc::string::String;
 
 #[cfg(target_vendor = "apple")]
 use crate::Error;
@@ -107,38 +109,41 @@ pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, [u8]> {
     str_cow_to_bytes(result)
 }
 
-/// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
-/// Uses CFStringGetFileSystemRepresentation to obtain the Darwin-native byte sequence.
+/// Obtain the Darwin-native filesystem representation of a string via
+/// `CFStringGetFileSystemRepresentation`.
 #[cfg(target_vendor = "apple")]
-pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
-    use core::ffi::{CStr, c_char};
+fn apple_file_system_representation(s: &str) -> Result<String> {
+    use core::ffi::CStr;
 
     use objc2_core_foundation::CFString;
 
     let cf = CFString::from_str(s);
     let max_len = cf.maximum_size_of_file_system_representation();
-    let mut buf = alloc::vec![0 as c_char; max_len as usize];
+    let mut buf = alloc::vec![0u8; max_len as usize];
     // Safety: buf is a valid, zero-initialized buffer of max_len bytes.
-    let ok = unsafe { cf.file_system_representation(buf.as_mut_ptr(), max_len) };
+    // c_char and u8 have the same size; the cast is layout-compatible.
+    let ok = unsafe { cf.file_system_representation(buf.as_mut_ptr().cast(), max_len) };
     if ok {
-        // Safety: file_system_representation wrote a null-terminated UTF-8 C string.
-        let c_str = unsafe { CStr::from_ptr(buf.as_ptr()) };
-        let result = c_str.to_str().map_err(|_| Error::OSError)?;
-        Ok(str_cow_to_bytes(cow(result.chars(), s)))
+        let nul = buf.iter().position(|&b| b == 0).ok_or(Error::OSError)?;
+        buf.truncate(nul);
+        String::from_utf8(buf).map_err(|_| Error::OSError)
     } else {
         Err(Error::OSError)
     }
 }
 
-/// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
 /// Portable fallback: NFD normalization + leading BOM removal.
 #[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
 #[allow(clippy::unnecessary_wraps)]
+fn apple_file_system_representation(s: &str) -> Result<String> {
+    Ok(nfd(s).trim_start_matches('\u{FEFF}').into())
+}
+
+/// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
+#[cfg(any(target_vendor = "apple", test, feature = "__test"))]
 pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
-    Ok(str_cow_to_bytes(cow(
-        nfd(s).trim_start_matches('\u{FEFF}').chars(),
-        s,
-    )))
+    let result = apple_file_system_representation(s)?;
+    Ok(str_cow_to_bytes(cow(result.chars(), s)))
 }
 
 /// Apply the current OS's compatibility mapping.
