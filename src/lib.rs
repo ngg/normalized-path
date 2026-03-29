@@ -29,9 +29,6 @@
 //!
 //! **Non-goals:**
 //!
-// TODO: `from_os_str` should accept slightly invalid UTF-8 input containing
-// overlong encodings or CESU-8 style 6-byte surrogate pairs, decoding them
-// to proper UTF-8 before normalization.
 //! - Not every name that a particular OS accepts is considered valid.  Non-UTF-8
 //!   byte sequences, names that normalize to empty (e.g. whitespace-only), and
 //!   names that normalize to `.` or `..` (e.g. `" .. "`) are always rejected.
@@ -55,7 +52,21 @@
 //!
 //! # Normalization pipeline
 //!
-//! Every path element name goes through the following steps during construction:
+//! Every path element name goes through the following steps during construction.
+//! When constructing from bytes (`from_bytes`, `from_os_str`), an additional
+//! decoding step is applied first:
+//!
+//! 0. **Byte decoding** -- the input bytes are decoded to UTF-8 with Modified
+//!    UTF-8 / CESU-8 awareness: the overlong encoding `0xC0 0x80` is decoded as
+//!    a null byte (U+0000), and CESU-8 surrogate pairs are decoded as the
+//!    corresponding supplementary character.  All other invalid byte sequences
+//!    are replaced with U+FFFD (invalid byte sequences can be encountered on
+//!    Unix filesystems, which allow arbitrary bytes except `/` and `\0` in names, and on
+//!    Windows, where filenames are WTF-16 and may contain unpaired surrogates).
+//!    The Modified UTF-8 handling is needed because older Android versions
+//!    used Java's Modified UTF-8 for filesystem paths, encoding null as
+//!    `0xC0 0x80` and supplementary characters as CESU-8 surrogate pairs.
+//!    When constructing from a string (`new`), this step is skipped.
 //!
 //! 1. **NFD decomposition** -- canonical decomposition to reorder combining marks.
 //!    This is needed because macOS stores filenames in a form close to NFD, so an
@@ -127,7 +138,6 @@
 // current runtime uses CESU-8 or UTF-8 and produce the appropriate encoding.
 //! - **Other platforms**: the OS-compatible form is identical to the case-sensitive
 //!   normalized form.
-//!
 //!
 //! # Types
 //!
@@ -288,4 +298,5 @@ pub mod test_helpers {
         windows_compatible_from_normalized_cs,
     };
     pub use crate::unicode::{case_fold, is_starter, is_whitespace, nfc, nfd};
+    pub use crate::utils::{decode_utf8_lossy, to_java_modified_utf8};
 }

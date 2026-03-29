@@ -167,7 +167,8 @@ impl<'a> PathElementCS<'a> {
 
     /// Creates a new case-sensitive path element from a byte slice.
     ///
-    /// Invalid UTF-8 is replaced with U+FFFD.
+    /// Invalid UTF-8 is accepted; see
+    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
     ///
@@ -179,7 +180,8 @@ impl<'a> PathElementCS<'a> {
 
     /// Creates a new case-sensitive path element from an OS string.
     ///
-    /// Invalid UTF-8 is replaced with U+FFFD.
+    /// Invalid UTF-8 is accepted; see
+    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
     ///
@@ -210,7 +212,8 @@ impl<'a> PathElementCI<'a> {
 
     /// Creates a new case-insensitive path element from a byte slice.
     ///
-    /// Invalid UTF-8 is replaced with U+FFFD.
+    /// Invalid UTF-8 is accepted; see
+    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
     ///
@@ -222,7 +225,8 @@ impl<'a> PathElementCI<'a> {
 
     /// Creates a new case-insensitive path element from an OS string.
     ///
-    /// Invalid UTF-8 is replaced with U+FFFD.
+    /// Invalid UTF-8 is accepted; see
+    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
     ///
@@ -249,7 +253,8 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Creates a new path element from a byte slice with runtime-selected case sensitivity.
     ///
-    /// Invalid UTF-8 is replaced with U+FFFD.
+    /// Invalid UTF-8 is accepted; see
+    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
     ///
@@ -264,7 +269,8 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Creates a new path element from an OS string with runtime-selected case sensitivity.
     ///
-    /// Invalid UTF-8 is replaced with U+FFFD.
+    /// Invalid UTF-8 is accepted; see
+    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
     ///
@@ -298,7 +304,8 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Convenience constructor for a case-sensitive `PathElement` from bytes.
     ///
-    /// Invalid UTF-8 is replaced with U+FFFD.
+    /// Invalid UTF-8 is accepted; see
+    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
     ///
@@ -309,7 +316,8 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Convenience constructor for a case-insensitive `PathElement` from bytes.
     ///
-    /// Invalid UTF-8 is replaced with U+FFFD.
+    /// Invalid UTF-8 is accepted; see
+    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
     ///
@@ -320,7 +328,8 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Convenience constructor for a case-sensitive `PathElement` from an OS string.
     ///
-    /// Invalid UTF-8 is replaced with U+FFFD.
+    /// Invalid UTF-8 is accepted; see
+    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
     ///
@@ -332,7 +341,8 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Convenience constructor for a case-insensitive `PathElement` from an OS string.
     ///
-    /// Invalid UTF-8 is replaced with U+FFFD.
+    /// Invalid UTF-8 is accepted; see
+    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
     ///
@@ -350,7 +360,8 @@ where
     /// Creates a new path element from a byte slice with an explicit case-sensitivity
     /// marker.
     ///
-    /// Invalid UTF-8 is replaced with U+FFFD.
+    /// Invalid UTF-8 is accepted; see
+    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// This is the most general byte-input constructor. The typed aliases
     /// ([`PathElementCS::from_bytes`], [`PathElementCI::from_bytes`]) and the
@@ -365,10 +376,13 @@ where
         case_sensitivity: impl Into<S>,
     ) -> Result<Self> {
         let cow_str = match original.into() {
-            Cow::Borrowed(b) => String::from_utf8_lossy(b),
+            Cow::Borrowed(b) => crate::utils::decode_utf8_lossy(b),
             Cow::Owned(v) => match String::from_utf8(v) {
                 Ok(s) => Cow::Owned(s),
-                Err(e) => Cow::Owned(String::from_utf8_lossy(e.as_bytes()).into_owned()),
+                Err(e) => {
+                    let decoded = crate::utils::decode_utf8_lossy(e.as_bytes());
+                    Cow::Owned(decoded.into_owned())
+                }
             },
         };
         Self::with_case_sensitivity(cow_str, case_sensitivity)
@@ -377,7 +391,8 @@ where
     /// Creates a new path element from an OS string with an explicit case-sensitivity
     /// marker.
     ///
-    /// Invalid UTF-8 is replaced with U+FFFD.
+    /// Invalid UTF-8 is accepted; see
+    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
     ///
@@ -1348,7 +1363,7 @@ mod tests {
             // Unpaired surrogate U+D800 encodes as 3 WTF-8 bytes, each replaced by U+FFFD
             let input = OsString::from_wide(&[0x68, 0xD800, 0x69]);
             let pe = PathElementCS::from_os_str(input.as_os_str()).unwrap();
-            assert_eq!(pe.original(), "h\u{FFFD}\u{FFFD}\u{FFFD}i");
+            assert_eq!(pe.original(), "h\u{FFFD}i");
         }
 
         #[cfg(windows)]
@@ -1357,7 +1372,7 @@ mod tests {
             use std::os::windows::ffi::OsStringExt;
             let input = OsString::from_wide(&[0x68, 0xD800, 0x69]);
             let pe = PathElementCS::from_os_str(input).unwrap();
-            assert_eq!(pe.original(), "h\u{FFFD}\u{FFFD}\u{FFFD}i");
+            assert_eq!(pe.original(), "h\u{FFFD}i");
         }
 
         // CI "H\tllo": original="H\tllo", os_compatible="H␉llo", normalized="h␉llo"
@@ -1581,6 +1596,92 @@ mod tests {
             let pe = PathElement::from_bytes(b"Hello.txt" as &[u8], CaseSensitive).unwrap();
             assert_eq!(pe.normalized(), "Hello.txt");
             assert_eq!(pe.case_sensitivity(), CaseSensitivity::Sensitive);
+        }
+
+        // --- Modified UTF-8 / CESU-8 decoding ---
+
+        #[test]
+        fn from_bytes_overlong_null() {
+            // 0xC0 0x80 (Modified UTF-8 null) → U+0000, which is then rejected
+            // because names containing null bytes are invalid.
+            let input: &[u8] = &[0x61, 0xC0, 0x80, 0x62]; // "a" + overlong null + "b"
+            let err = PathElementCS::from_bytes(input).unwrap_err();
+            assert!(matches!(err, crate::Error::ContainsNullByte));
+        }
+
+        #[test]
+        fn from_bytes_cesu8_surrogate_pair() {
+            // U+1F600 (😀) as CESU-8: ED A0 BD ED B8 80
+            let input: &[u8] = &[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80];
+            let pe = PathElementCS::from_bytes(input).unwrap();
+            assert_eq!(pe.original(), "😀");
+            assert_eq!(pe.normalized(), "😀");
+        }
+
+        #[test]
+        fn from_bytes_cesu8_in_filename() {
+            // "file_" + U+1F600 as CESU-8 + ".txt"
+            let mut input = b"file_".to_vec();
+            input.extend_from_slice(&[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]);
+            input.extend_from_slice(b".txt");
+            let pe = PathElementCS::from_bytes(input).unwrap();
+            assert_eq!(pe.original(), "file_😀.txt");
+            assert_eq!(pe.normalized(), "file_😀.txt");
+        }
+
+        #[test]
+        fn from_bytes_cesu8_case_insensitive() {
+            // CESU-8 input normalized in CI mode
+            let mut input = b"File_".to_vec();
+            input.extend_from_slice(&[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]); // 😀
+            input.extend_from_slice(b".TXT");
+            let pe = PathElementCI::from_bytes(input).unwrap();
+            assert_eq!(pe.original(), "File_😀.TXT");
+            assert_eq!(pe.normalized(), "file_😀.txt");
+        }
+
+        #[test]
+        fn from_bytes_lone_high_surrogate_replaced() {
+            // ED A0 80 (high surrogate U+D800 without low) → U+FFFD
+            let input: &[u8] = &[0x61, 0xED, 0xA0, 0x80, 0x62]; // "a" + lone high + "b"
+            let pe = PathElementCS::from_bytes(input).unwrap();
+            assert_eq!(pe.original(), "a\u{FFFD}b");
+        }
+
+        #[test]
+        fn from_bytes_lone_low_surrogate_replaced() {
+            // ED B0 80 (low surrogate U+DC00 without high) → U+FFFD
+            let input: &[u8] = &[0x61, 0xED, 0xB0, 0x80, 0x62]; // "a" + lone low + "b"
+            let pe = PathElementCS::from_bytes(input).unwrap();
+            assert_eq!(pe.original(), "a\u{FFFD}b");
+        }
+
+        #[test]
+        fn from_bytes_cesu8_matches_direct_utf8() {
+            // Same character via CESU-8 and direct UTF-8 should produce equal PathElements.
+            let cesu8: &[u8] = &[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]; // 😀 as CESU-8
+            let utf8: &[u8] = "😀".as_bytes();
+            let pe_cesu = PathElementCS::from_bytes(cesu8).unwrap();
+            let pe_utf8 = PathElementCS::from_bytes(utf8).unwrap();
+            assert_eq!(pe_cesu, pe_utf8);
+        }
+
+        #[test]
+        fn from_bytes_overlong_null_only() {
+            // Just the overlong null — decodes to "\0" which is rejected.
+            let input: &[u8] = &[0xC0, 0x80];
+            let err = PathElementCS::from_bytes(input).unwrap_err();
+            assert!(matches!(err, crate::Error::ContainsNullByte));
+        }
+
+        #[test]
+        fn from_bytes_mixed_cesu8_and_invalid() {
+            // Valid ASCII + CESU-8 emoji + invalid byte
+            let mut input = b"hi".to_vec();
+            input.extend_from_slice(&[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]); // 😀
+            input.push(0xFF); // invalid
+            let pe = PathElementCS::from_bytes(input).unwrap();
+            assert_eq!(pe.original(), "hi😀\u{FFFD}");
         }
     }
 }
