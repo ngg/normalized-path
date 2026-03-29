@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
@@ -59,8 +59,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build
       - run: cargo build --no-default-features
+      - run: cargo build --features jni
       - run: cargo test
       - run: cargo test --no-default-features
+      - run: cargo test --features jni
 
   wasm32-unknown-unknown:
     runs-on: ubuntu-latest
