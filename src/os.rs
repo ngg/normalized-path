@@ -1,6 +1,3 @@
-#[cfg(any(target_vendor = "apple", test, feature = "__test"))]
-use alloc::vec::Vec;
-
 #[cfg(target_vendor = "apple")]
 use crate::Error;
 use crate::Result;
@@ -106,10 +103,10 @@ pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, [u8]> {
     str_cow_to_bytes(result)
 }
 
-/// Obtain the Darwin-native filesystem representation of a string via
-/// `CFStringGetFileSystemRepresentation`.
+/// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
+/// Uses `CFStringGetFileSystemRepresentation` to obtain the Darwin-native byte sequence.
 #[cfg(target_vendor = "apple")]
-fn apple_file_system_representation(s: &str) -> Result<Vec<u8>> {
+pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
     use objc2_core_foundation::CFString;
 
     let cf = CFString::from_str(s);
@@ -120,26 +117,22 @@ fn apple_file_system_representation(s: &str) -> Result<Vec<u8>> {
     let ok = unsafe { cf.file_system_representation(buf.as_mut_ptr().cast(), max_len) };
     if ok {
         let nul = buf.iter().position(|&b| b == 0).ok_or(Error::OSError)?;
-        buf.truncate(nul);
-        Ok(buf)
+        let soo = SubstringOrOwned::new(&buf[..nul], s.as_bytes());
+        Ok(soo.into_cow(Cow::Borrowed(s.as_bytes())))
     } else {
         Err(Error::OSError)
     }
 }
 
-/// Portable fallback: NFD normalization + leading BOM removal.
+/// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
+/// Portable fallback using NFD normalization + leading BOM removal.
 #[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
 #[allow(clippy::unnecessary_wraps)]
-fn apple_file_system_representation(s: &str) -> Result<Vec<u8>> {
-    Ok(nfd(s).trim_start_matches('\u{FEFF}').as_bytes().to_vec())
-}
-
-/// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
-#[cfg(any(target_vendor = "apple", test, feature = "__test"))]
 pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
-    let bytes = apple_file_system_representation(s)?;
-    let soo = SubstringOrOwned::new(&bytes[..], s.as_bytes());
-    Ok(soo.into_cow(Cow::Borrowed(s.as_bytes())))
+    Ok(str_cow_to_bytes(cow(
+        nfd(s).trim_start_matches('\u{FEFF}').chars(),
+        s,
+    )))
 }
 
 /// Apply the current OS's compatibility mapping.
