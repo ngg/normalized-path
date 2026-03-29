@@ -134,9 +134,12 @@
 //!   and their superscript-digit variants).
 //! - **Apple (macOS/iOS)**: converted using [`CFStringGetFileSystemRepresentation`](https://developer.apple.com/documentation/corefoundation/cfstringgetfilesystemrepresentation(_:_:_:))
 //!   as recommended by Apple's documentation (produces a representation similar to NFD).
-//! - **Android (Java Modified UTF-8)**: when [`set_java_modified_utf8(true)`](set_java_modified_utf8)
-//!   is called, the OS-compatible form encodes supplementary characters as CESU-8
-//!   surrogate pairs, matching the encoding used by older Android runtimes.
+//! - **Android (Java Modified UTF-8)**: older Android versions used Java's Modified
+//!   UTF-8 for filesystem paths, encoding supplementary characters as CESU-8
+//!   surrogate pairs. When [`configure_java_modified_utf8(true)`](configure_java_modified_utf8) is called, the
+//!   OS-compatible form uses this encoding. With the `jni` feature enabled,
+//!   [`configure_java_modified_utf8_from_jni()`] can auto-detect the runtime encoding
+//!   and set the flag accordingly.
 //! - **Other platforms**: the OS-compatible form is identical to the case-sensitive
 //!   normalized form.
 //!
@@ -239,6 +242,8 @@ extern crate alloc;
 mod case_sensitivity;
 #[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
 mod java_modified_utf8;
+#[cfg(feature = "jni")]
+mod jni_support;
 mod normalize;
 mod os;
 mod path_element;
@@ -247,7 +252,12 @@ mod utils;
 
 pub use case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
 #[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
-pub use java_modified_utf8::{java_modified_utf8, set_java_modified_utf8};
+pub use java_modified_utf8::{configure_java_modified_utf8, is_using_java_modified_utf8};
+#[cfg(all(
+    feature = "jni",
+    not(any(target_os = "windows", target_vendor = "apple"))
+))]
+pub use jni_support::configure_java_modified_utf8_from_jni;
 pub use path_element::{PathElement, PathElementCI, PathElementCS, PathElementGeneric};
 
 /// Errors that can occur during path element normalization and validation.
@@ -287,6 +297,11 @@ pub enum Error {
     /// An OS-level operation failed (e.g., Apple's `CFStringGetFileSystemRepresentation`).
     #[error("OS error")]
     OSError,
+
+    /// A JNI operation failed.
+    #[cfg(feature = "jni")]
+    #[error("JNI error: {0}")]
+    JniError(#[from] jni::errors::Error),
 }
 
 /// A [`Result`](core::result::Result) type alias using this crate's [`Error`].

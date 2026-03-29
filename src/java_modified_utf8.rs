@@ -16,17 +16,18 @@ std::thread_local! {
 /// returns bytes encoded in Java's Modified UTF-8 format, where supplementary
 /// characters (U+10000 and above) are represented as CESU-8 surrogate pairs.
 ///
-/// This should be called once at application startup, before constructing any
-/// path elements, on Android runtimes that use Java Modified UTF-8 for
-/// filesystem paths.
-pub fn set_java_modified_utf8(enabled: bool) {
+/// The default is `false` on all platforms. This should be called once at
+/// application startup, before constructing any path elements, on Android
+/// runtimes that use Java Modified UTF-8 for filesystem paths.
+pub fn configure_java_modified_utf8(enabled: bool) {
     GLOBAL.store(enabled, Ordering::Relaxed);
 }
 
 /// Returns whether Java Modified UTF-8 encoding is enabled for OS-compatible output.
 ///
-/// See [`set_java_modified_utf8`] for details.
-pub fn java_modified_utf8() -> bool {
+/// Returns `false` by default on all platforms.
+/// See [`configure_java_modified_utf8()`] for details.
+pub fn is_using_java_modified_utf8() -> bool {
     #[cfg(all(feature = "std", any(test, feature = "__test")))]
     {
         if let Some(v) = LOCAL.get() {
@@ -55,7 +56,7 @@ pub fn thread_override_java_modified_utf8(val: bool) -> impl Drop {
 }
 
 pub fn str_to_os_bytes(s: Cow<'_, str>) -> Cow<'_, [u8]> {
-    if java_modified_utf8() {
+    if is_using_java_modified_utf8() {
         match to_java_modified_utf8(&s) {
             Cow::Borrowed(_) => str_cow_to_bytes(s),
             Cow::Owned(v) => Cow::Owned(v),
@@ -77,7 +78,7 @@ mod tests {
 
     #[test]
     fn str_to_os_bytes_passthrough_when_disabled() {
-        assert!(!java_modified_utf8());
+        assert!(!is_using_java_modified_utf8());
         let result = str_to_os_bytes(Cow::Borrowed("hello"));
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result.as_ref(), b"hello");
@@ -113,33 +114,33 @@ mod tests {
         #[test]
         fn flag_override_false() {
             let _guard = thread_override_java_modified_utf8(false);
-            assert!(!java_modified_utf8());
+            assert!(!is_using_java_modified_utf8());
         }
 
         #[test]
         fn flag_override_true() {
             let _guard = thread_override_java_modified_utf8(true);
-            assert!(java_modified_utf8());
+            assert!(is_using_java_modified_utf8());
         }
 
         #[test]
         fn flag_override_restores_on_drop() {
             {
                 let _guard = thread_override_java_modified_utf8(true);
-                assert!(java_modified_utf8());
+                assert!(is_using_java_modified_utf8());
             }
-            assert!(!java_modified_utf8());
+            assert!(!is_using_java_modified_utf8());
         }
 
         #[test]
         fn flag_override_nested() {
             let _outer = thread_override_java_modified_utf8(true);
-            assert!(java_modified_utf8());
+            assert!(is_using_java_modified_utf8());
             {
                 let _inner = thread_override_java_modified_utf8(false);
-                assert!(!java_modified_utf8());
+                assert!(!is_using_java_modified_utf8());
             }
-            assert!(java_modified_utf8());
+            assert!(is_using_java_modified_utf8());
         }
 
         #[test]
@@ -173,10 +174,14 @@ mod tests {
         }
 
         #[test]
-        fn path_element_roundtrip_with_flag() {
+        fn path_element_os_compatible_uses_modified_utf8() {
             let _guard = thread_override_java_modified_utf8(true);
             let pe = PathElementCS::new("file_😀.txt").unwrap();
             let os_bytes = pe.os_compatible();
+            // 😀 is U+1F600, encoded as CESU-8 surrogate pair: 6 bytes instead of 4
+            assert_ne!(os_bytes, "file_😀.txt".as_bytes());
+            assert_eq!(os_bytes.len(), "file_😀.txt".len() + 2);
+            // Round-trip still works
             let pe2 = PathElementCS::from_bytes(os_bytes).unwrap();
             assert_eq!(pe.normalized(), pe2.normalized());
         }

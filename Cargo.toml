@@ -14,12 +14,17 @@ rust-version = "1.85"
 license = "Apache-2.0 OR MIT"
 readme = "README.md"
 
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+
 [badges]
 maintenance = { status = "experimental" }
 
 [features]
 default = ["std"]
 std = ["thiserror/std"]
+jni = ["std", "dep:jni"]
 __test = []
 
 [dependencies]
@@ -27,11 +32,15 @@ __test = []
 icu_casemap = { version = "~2.1.0", default-features = false, features = ["compiled_data"] }
 icu_normalizer = { version = "~2.1.0", default-features = false, features = ["compiled_data"] }
 icu_properties = { version = "~2.1.0", default-features = false, features = ["compiled_data"] }
+jni = { version = "0.22.0", default-features = false, optional = true }
 memchr = { version = "2.0.0", default-features = false }
 thiserror = { version = "2.0.0", default-features = false }
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 objc2-core-foundation = { version = "0.3.0", default-features = false, features = ["CFString"] }
+
+[dev-dependencies]
+jni = { version = "0.22.0", features = ["invocation"] }
 
 [target.'cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))'.dev-dependencies]
 wasm-bindgen-test = "0.3.0"

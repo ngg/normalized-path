@@ -364,7 +364,7 @@ where
     /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// This is the most general byte-input constructor. The typed aliases
-    /// ([`PathElementCS::from_bytes`], [`PathElementCI::from_bytes`]) and the
+    /// ([`PathElementCS::from_bytes()`], [`PathElementCI::from_bytes()`]) and the
     /// runtime-dynamic constructors delegate to this method.
     ///
     /// # Errors
@@ -413,7 +413,7 @@ where
     /// Creates a new path element with an explicit case-sensitivity marker.
     ///
     /// This is the most general string constructor. The typed aliases
-    /// ([`PathElementCS::new`], [`PathElementCI::new`]) and the runtime-dynamic
+    /// ([`PathElementCS::new()`], [`PathElementCI::new()`]) and the runtime-dynamic
     /// constructors delegate to this method.
     ///
     /// # Errors
@@ -1683,5 +1683,26 @@ mod tests {
             let pe = PathElementCS::from_bytes(input).unwrap();
             assert_eq!(pe.original(), "hi😀\u{FFFD}");
         }
+    }
+
+    // --- os_compatible supplementary character tests ---
+
+    #[test]
+    fn os_compatible_supplementary_unchanged() {
+        let pe = PathElementCS::new("file_😀.txt").unwrap();
+        assert_eq!(pe.os_compatible(), "file_😀.txt".as_bytes());
+    }
+
+    #[test]
+    fn os_compatible_supplementary_roundtrip() {
+        let pe = PathElementCS::new("file_😀.txt").unwrap();
+        let pe2 = PathElementCS::from_bytes(pe.os_compatible()).unwrap();
+        assert_eq!(pe.normalized(), pe2.normalized());
+    }
+
+    #[test]
+    fn os_compatible_multiple_supplementary() {
+        let pe = PathElementCS::new("𐀀_𝄞_😀").unwrap();
+        assert_eq!(pe.os_compatible(), "𐀀_𝄞_😀".as_bytes());
     }
 }
