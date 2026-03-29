@@ -2,8 +2,6 @@ use alloc::borrow::Cow;
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
 use alloc::format;
 #[cfg(any(target_vendor = "apple", test, feature = "__test"))]
-use alloc::string::String;
-#[cfg(any(target_vendor = "apple", test, feature = "__test"))]
 use alloc::vec::Vec;
 
 #[cfg(target_vendor = "apple")]
