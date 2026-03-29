@@ -58,7 +58,7 @@ jobs:
       - run: cargo test
       - run: cargo test --no-default-features
 
-  wasm-unknown:
+  wasm32-unknown-unknown:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -66,11 +66,12 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+      - run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
       - run: cargo build --target wasm32-unknown-unknown
-      - run: cargo install -f wasm-bindgen-cli --version $(cargo pkgid wasm-bindgen | cut -d"@" -f2)
+      - run: cargo binstall -y --force wasm-bindgen-cli@$(cargo pkgid wasm-bindgen | cut -d"@" -f2)
       - run: cargo test --target wasm32-unknown-unknown
 
-  wasm-wasip1:
+  wasm32-wasip1:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -78,6 +79,27 @@ jobs:
         with:
           targets: wasm32-wasip1
       - uses: Swatinem/rust-cache@v2
+      - run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
       - run: cargo build --target wasm32-wasip1
-      - run: cargo install wasmtime-cli
+      - run: cargo binstall -y wasmtime-cli
       - run: cargo test --target wasm32-wasip1
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v5
+        with:
+          path: |
+            fuzz/artifacts
+            fuzz/corpus
+          key: fuzz-${{ github.sha }}
+          restore-keys: fuzz-
+      - run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+      - run: cargo binstall -y cargo-fuzz
+      - run: |
+          for target in $(cargo fuzz list 2>/dev/null); do
+            cargo fuzz run "$target" -- -max_total_time=300
+          done
