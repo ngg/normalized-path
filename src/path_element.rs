@@ -532,7 +532,8 @@ where
                     .expect("assertion error: os_compatible is not valid UTF-8 on this platform"),
             )),
             Cow::Owned(v) => Cow::Owned(OsString::from(
-                String::from_utf8(v).expect("assertion error: os_compatible is not valid UTF-8 on this platform"),
+                String::from_utf8(v)
+                    .expect("assertion error: os_compatible is not valid UTF-8 on this platform"),
             )),
         }
     }
