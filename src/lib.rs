@@ -29,6 +29,9 @@
 //!
 //! **Non-goals:**
 //!
+// TODO: `from_os_str` should accept slightly invalid UTF-8 input containing
+// overlong encodings or CESU-8 style 6-byte surrogate pairs, decoding them
+// to proper UTF-8 before normalization.
 //! - Not every name that a particular OS accepts is considered valid.  Non-UTF-8
 //!   byte sequences, names that normalize to empty (e.g. whitespace-only), and
 //!   names that normalize to `.` or `..` (e.g. `" .. "`) are always rejected.
@@ -120,6 +123,8 @@
 //!   and their superscript-digit variants).
 //! - **Apple (macOS/iOS)**: converted using [`CFStringGetFileSystemRepresentation`](https://developer.apple.com/documentation/corefoundation/cfstringgetfilesystemrepresentation(_:_:_:))
 //!   as recommended by Apple's documentation (produces a representation similar to NFD).
+// TODO: On Android, the OS compatibility mapping should detect whether the
+// current runtime uses CESU-8 or UTF-8 and produce the appropriate encoding.
 //! - **Other platforms**: the OS-compatible form is identical to the case-sensitive
 //!   normalized form.
 //!

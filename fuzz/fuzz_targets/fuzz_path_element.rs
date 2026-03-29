@@ -24,7 +24,7 @@ fn unmap_fullwidth(s: &str) -> String {
 fn unmap_control_chars(s: &str) -> String {
     s.chars()
         .map(|c| match c {
-            '\u{2400}'..='\u{241F}' => char::from_u32(c as u32 - 0x2400).unwrap_or(c),
+            '\u{2401}'..='\u{241F}' => char::from_u32(c as u32 - 0x2400).unwrap_or(c),
             '\u{2421}' => '\x7F',
             _ => c,
         })
