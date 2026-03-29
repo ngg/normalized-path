@@ -1682,7 +1682,10 @@ mod tests {
             input.extend_from_slice(&[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]); // 😀
             input.push(0xFF); // invalid
             let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "hi\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}");
+            assert_eq!(
+                pe.original(),
+                "hi\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}"
+            );
         }
     }
 

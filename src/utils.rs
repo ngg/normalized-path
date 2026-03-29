@@ -679,7 +679,10 @@ mod tests {
         input.push(0xFF); // invalid
         let result = decode_utf8_lossy(&input);
         // from_utf8_lossy doesn't understand CESU-8 — all bytes invalid
-        assert_eq!(result, "\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}");
+        assert_eq!(
+            result,
+            "\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}"
+        );
     }
 
     #[test]

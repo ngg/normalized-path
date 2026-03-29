@@ -260,7 +260,18 @@ mod utils;
 
 pub use case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
 #[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
-pub use java_modified_utf8::{configure_java_modified_utf8, is_using_java_modified_utf8};
+pub use java_modified_utf8::configure_java_modified_utf8;
+#[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
+pub use java_modified_utf8::is_using_java_modified_utf8;
+
+/// Returns whether Java Modified UTF-8 encoding is enabled for OS-compatible output.
+///
+/// Always returns `false` on Windows and Apple platforms.
+#[cfg(any(target_os = "windows", target_vendor = "apple"))]
+#[must_use]
+pub fn is_using_java_modified_utf8() -> bool {
+    false
+}
 #[cfg(all(
     feature = "jni",
     not(any(target_os = "windows", target_vendor = "apple"))
