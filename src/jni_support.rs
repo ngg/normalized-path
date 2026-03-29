@@ -27,8 +27,8 @@ pub fn configure_java_modified_utf8_from_jni(env: &mut jni::Env<'_>) -> Result<(
     Ok(())
 }
 
-// Tests require the JVM invocation API, which is not available on Android.
-#[cfg(all(test, not(target_os = "android")))]
+// Tests require the JVM invocation API (libloading), available on unix/windows but not Android.
+#[cfg(all(test, any(unix, windows), not(target_os = "android")))]
 mod tests {
     use super::*;
 
