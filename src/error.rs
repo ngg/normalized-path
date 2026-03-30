@@ -22,8 +22,9 @@ pub enum ErrorKind {
     /// terminator, silently truncating the name.
     ContainsNullByte,
 
-    /// An OS-level operation failed (e.g., Apple's `CFStringGetFileSystemRepresentation`).
-    OSError,
+    /// Apple's `CFStringGetFileSystemRepresentation` failed.
+    #[cfg(target_vendor = "apple")]
+    GetFileSystemRepresentationError,
 
     /// A JNI operation failed.
     #[cfg(feature = "jni")]
@@ -48,7 +49,10 @@ impl core::fmt::Display for ErrorKind {
             Self::ParentDirectoryMarker => f.write_str("parent directory marker"),
             Self::ContainsForwardSlash => f.write_str("contains forward slash"),
             Self::ContainsNullByte => f.write_str("contains null byte"),
-            Self::OSError => f.write_str("OS error"),
+            #[cfg(target_vendor = "apple")]
+            Self::GetFileSystemRepresentationError => {
+                f.write_str("CFStringGetFileSystemRepresentation failed")
+            }
             #[cfg(feature = "jni")]
             Self::JniError(e) => write!(f, "JNI error: {e}"),
         }
@@ -159,7 +163,6 @@ mod tests {
             ErrorKind::ContainsNullByte.to_string(),
             "contains null byte"
         );
-        assert_eq!(ErrorKind::OSError.to_string(), "OS error");
     }
 
     #[test]
@@ -171,9 +174,9 @@ mod tests {
 
     #[test]
     fn into_error_empty_original() {
-        let err = ErrorKind::OSError.into_error(String::new());
+        let err = ErrorKind::Empty.into_error(String::new());
         assert_eq!(err.original(), "");
-        assert!(matches!(err.kind(), ErrorKind::OSError));
+        assert!(matches!(err.kind(), ErrorKind::Empty));
     }
 
     #[test]
@@ -190,8 +193,8 @@ mod tests {
 
     #[test]
     fn error_display_empty_original() {
-        let err = ErrorKind::OSError.into_error(String::new());
-        assert_eq!(format!("{err}"), "OS error");
+        let err = ErrorKind::Empty.into_error(String::new());
+        assert_eq!(format!("{err}"), "empty filename");
     }
 
     #[test]

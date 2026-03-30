@@ -121,11 +121,11 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>>
     // c_char and u8 have the same size; the cast is layout-compatible.
     let ok = unsafe { cf.file_system_representation(buf.as_mut_ptr().cast(), max_len) };
     if ok {
-        let nul = buf.iter().position(|&b| b == 0).ok_or(ErrorKind::OSError)?;
+        let nul = buf.iter().position(|&b| b == 0).ok_or(ErrorKind::GetFileSystemRepresentationError)?;
         let soo = SubstringOrOwned::new(&buf[..nul], s.as_bytes());
         Ok(soo.into_cow(Cow::Borrowed(s.as_bytes())))
     } else {
-        Err(ErrorKind::OSError)
+        Err(ErrorKind::GetFileSystemRepresentationError)
     }
 }
 
