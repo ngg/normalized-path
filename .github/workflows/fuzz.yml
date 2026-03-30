@@ -44,9 +44,11 @@ jobs:
       - run: cargo install cargo-fuzz
       - run: |
           for target in $(cargo fuzz list 2>/dev/null); do
-            cargo fuzz run "$target" -- -max_total_time=${{ inputs.linux-timeout }}
+            cargo fuzz run "$target" -- -max_total_time="$TIMEOUT"
             cargo fuzz cmin "$target"
           done
+        env:
+          TIMEOUT: ${{ inputs.linux-timeout }}
       - uses: actions/cache/save@v5
         if: always()
         with:
@@ -79,9 +81,11 @@ jobs:
       - run: cargo install cargo-fuzz
       - run: |
           for target in $(cargo fuzz list 2>/dev/null); do
-            cargo fuzz run "$target" -- -max_total_time=${{ inputs.macos-timeout }}
+            cargo fuzz run "$target" -- -max_total_time="$TIMEOUT"
             cargo fuzz cmin "$target"
           done
+        env:
+          TIMEOUT: ${{ inputs.macos-timeout }}
       - uses: actions/cache/save@v5
         if: always()
         with:

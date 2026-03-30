@@ -23,4 +23,6 @@ jobs:
           enableCrossOsArchive: true
       - run: |
           mkdir -p fuzz
-          curl -fsSL "${{ inputs.url }}" | tar xz -C fuzz
+          curl -fsSL "$URL" | tar xz -C fuzz
+        env:
+          URL: ${{ inputs.url }}
