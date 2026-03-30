@@ -199,7 +199,7 @@ mod tests {
         let err = ErrorKind::Empty.into_error(String::from("."));
         let debug = format!("{err:?}");
         assert!(debug.contains("Empty"));
-        assert!(debug.contains("."));
+        assert!(debug.contains('.'));
     }
 
     #[test]
