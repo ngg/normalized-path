@@ -129,18 +129,30 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>>
     }
 }
 
+/// Apple compatibility mapping: portable fallback.
+///
+/// NFD normalization + leading BOM removal, without calling into Apple frameworks.
+/// Always available in test/`__test` builds; used by the real
+/// `apple_compatible_from_normalized_cs` on Apple targets as well.
+#[cfg(any(test, feature = "__test"))]
+#[must_use]
+pub fn apple_compatible_from_normalized_cs_fallback(s: &str) -> Cow<'_, [u8]> {
+    cow_str_to_bytes(cow(
+        nfd(s).trim_start_matches('\u{FEFF}').chars(),
+        s,
+    ))
+}
+
 /// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
 /// Portable fallback using NFD normalization + leading BOM removal.
 ///
 /// # Errors
-/// Returns an error if the name is invalid.
+///
+/// This fallback is infallible but returns `ResultKind` for API compatibility.
 #[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
 #[allow(clippy::unnecessary_wraps)]
 pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
-    Ok(cow_str_to_bytes(cow(
-        nfd(s).trim_start_matches('\u{FEFF}').chars(),
-        s,
-    )))
+    Ok(apple_compatible_from_normalized_cs_fallback(s))
 }
 
 /// Apply the current OS's compatibility mapping.

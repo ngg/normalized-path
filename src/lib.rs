@@ -281,8 +281,8 @@ pub mod test_helpers {
         normalize_ci_from_normalized_cs, normalize_cs, trim_whitespace_like, validate_path_element,
     };
     pub use crate::os::{
-        apple_compatible_from_normalized_cs, is_reserved_on_windows,
-        windows_compatible_from_normalized_cs,
+        apple_compatible_from_normalized_cs, apple_compatible_from_normalized_cs_fallback,
+        is_reserved_on_windows, windows_compatible_from_normalized_cs,
     };
     pub use crate::unicode::{case_fold, is_starter, is_whitespace, nfc, nfd};
 }
