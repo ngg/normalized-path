@@ -44,7 +44,7 @@ impl ErrorKind {
 impl core::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Empty => f.write_str("empty filename"),
+            Self::Empty => f.write_str("empty path element"),
             Self::CurrentDirectoryMarker => f.write_str("current directory marker"),
             Self::ParentDirectoryMarker => f.write_str("parent directory marker"),
             Self::ContainsForwardSlash => f.write_str("contains forward slash"),
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn error_kind_display() {
-        assert_eq!(ErrorKind::Empty.to_string(), "empty filename");
+        assert_eq!(ErrorKind::Empty.to_string(), "empty path element");
         assert_eq!(
             ErrorKind::CurrentDirectoryMarker.to_string(),
             "current directory marker"
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn error_display_empty_original() {
         let err = ErrorKind::Empty.into_error(String::new());
-        assert_eq!(format!("{err}"), "empty filename");
+        assert_eq!(format!("{err}"), "empty path element");
     }
 
     #[test]
