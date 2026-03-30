@@ -3,7 +3,7 @@ use crate::ErrorKind;
 use crate::error::ResultKind;
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
 use crate::unicode::case_fold;
-#[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
+#[cfg(any(test, feature = "__test"))]
 use crate::unicode::nfd;
 #[cfg(target_vendor = "apple")]
 use crate::utils::SubstringOrOwned;
@@ -121,7 +121,10 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>>
     // c_char and u8 have the same size; the cast is layout-compatible.
     let ok = unsafe { cf.file_system_representation(buf.as_mut_ptr().cast(), max_len) };
     if ok {
-        let nul = buf.iter().position(|&b| b == 0).ok_or(ErrorKind::GetFileSystemRepresentationError)?;
+        let nul = buf
+            .iter()
+            .position(|&b| b == 0)
+            .ok_or(ErrorKind::GetFileSystemRepresentationError)?;
         let soo = SubstringOrOwned::new(&buf[..nul], s.as_bytes());
         Ok(soo.into_cow(Cow::Borrowed(s.as_bytes())))
     } else {
@@ -137,10 +140,7 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>>
 #[cfg(any(test, feature = "__test"))]
 #[must_use]
 pub fn apple_compatible_from_normalized_cs_fallback(s: &str) -> Cow<'_, [u8]> {
-    cow_str_to_bytes(cow(
-        nfd(s).trim_start_matches('\u{FEFF}').chars(),
-        s,
-    ))
+    cow_str_to_bytes(cow(nfd(s).trim_start_matches('\u{FEFF}').chars(), s))
 }
 
 /// Apple compatibility mapping: NFC to NFD conversion and BOM removal.

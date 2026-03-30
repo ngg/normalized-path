@@ -3,14 +3,14 @@
 use icu_casemap::CaseMapper;
 use icu_locale_core::langid;
 use libfuzzer_sys::fuzz_target;
-use normalized_path::test_helpers::{
-    apple_compatible_from_normalized_cs, case_fold, decode_utf8_lossy,
-    encode_java_modified_utf8, is_reserved_on_windows, map_control_chars, map_fullwidth,
-    map_turkish_i, nfc, nfd, normalize_ci_from_normalized_cs, normalize_cs,
-    trim_whitespace_like, validate_path_element, windows_compatible_from_normalized_cs,
-};
 #[cfg(target_vendor = "apple")]
 use normalized_path::test_helpers::apple_compatible_from_normalized_cs_fallback;
+use normalized_path::test_helpers::{
+    apple_compatible_from_normalized_cs, case_fold, decode_utf8_lossy, encode_java_modified_utf8,
+    is_reserved_on_windows, map_control_chars, map_fullwidth, map_turkish_i, nfc, nfd,
+    normalize_ci_from_normalized_cs, normalize_cs, trim_whitespace_like, validate_path_element,
+    windows_compatible_from_normalized_cs,
+};
 use normalized_path::{CaseSensitivity, PathElement};
 
 /// Reverse of `map_fullwidth`: map ASCII printable characters to their fullwidth equivalents.
