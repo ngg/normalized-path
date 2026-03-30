@@ -1,0 +1,26 @@
+name: Import fuzz corpus
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL to a tar.gz file containing the fuzz corpus"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache@v5
+        with:
+          path: fuzz/corpus
+          key: fuzz-import-${{ github.run_id }}
+          restore-keys: fuzz-
+          enableCrossOsArchive: true
+      - run: |
+          mkdir -p fuzz
+          curl -fsSL "${{ inputs.url }}" | tar xz -C fuzz

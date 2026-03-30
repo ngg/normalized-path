@@ -1,0 +1,23 @@
+name: Export fuzz corpus
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/restore@v5
+        with:
+          path: fuzz/corpus
+          key: fuzz-never-matches
+          restore-keys: fuzz-
+          enableCrossOsArchive: true
+      - run: tar czf corpus.tar.gz -C fuzz corpus
+      - uses: actions/upload-artifact@v6
+        with:
+          name: fuzz-corpus
+          path: corpus.tar.gz
