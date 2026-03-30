@@ -21,3 +21,4 @@ jobs:
         with:
           name: fuzz-corpus
           path: corpus.tar.gz
+          compression-level: 0

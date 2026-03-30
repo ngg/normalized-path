@@ -5,7 +5,7 @@ on:
     inputs:
       linux-timeout:
         type: number
-        default: 300
+        default: 60
       macos-timeout:
         type: number
         default: 60
@@ -14,7 +14,7 @@ on:
       linux-timeout:
         description: "Linux fuzz timeout in seconds"
         type: number
-        default: 300
+        default: 60
       macos-timeout:
         description: "macOS fuzz timeout in seconds"
         type: number
