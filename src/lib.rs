@@ -250,6 +250,7 @@
 extern crate alloc;
 
 mod case_sensitivity;
+mod error;
 mod java_modified_utf8;
 #[cfg(feature = "jni")]
 mod jni_support;
@@ -267,55 +268,11 @@ pub use java_modified_utf8::is_using_java_modified_utf8;
 pub use jni_support::configure_java_modified_utf8_from_jni;
 pub use path_element::{PathElement, PathElementCI, PathElementCS, PathElementGeneric};
 
-/// Errors that can occur during path element normalization and validation.
-///
-/// ```
-/// # use normalized_path::PathElementCS;
-/// assert!(PathElementCS::new("").is_err());
-/// assert!(PathElementCS::new(".").is_err());
-/// assert!(PathElementCS::new("..").is_err());
-/// assert!(PathElementCS::new("a/b").is_err());
-/// assert!(PathElementCS::new("hello.txt").is_ok());
-/// ```
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum Error {
-    /// The name is empty (or becomes empty after whitespace trimming).
-    #[error("empty filename")]
-    Empty,
-
-    /// The name is `.`, the current directory marker.
-    #[error("current directory marker")]
-    CurrentDirectoryMarker,
-
-    /// The name is `..`, the parent directory marker.
-    #[error("parent directory marker")]
-    ParentDirectoryMarker,
-
-    /// The name contains a forward slash (`/`), which is a path separator.
-    #[error("contains forward slash")]
-    ContainsForwardSlash,
-
-    /// The name contains a null byte (`\0`), which all OSes treat as a string
-    /// terminator, silently truncating the name.
-    #[error("contains null byte")]
-    ContainsNullByte,
-
-    /// An OS-level operation failed (e.g., Apple's `CFStringGetFileSystemRepresentation`).
-    #[error("OS error")]
-    OSError,
-
-    /// A JNI operation failed.
-    #[cfg(feature = "jni")]
-    #[error("JNI error: {0}")]
-    JniError(#[from] jni::errors::Error),
-}
-
-/// A [`Result`](core::result::Result) type alias using this crate's [`Error`].
-pub type Result<T> = core::result::Result<T, Error>;
+pub use error::{Error, ErrorKind, Result};
 
 #[cfg(any(feature = "__test", test))]
 pub mod test_helpers {
+    pub use crate::error::ResultKind;
     #[cfg(all(unix, not(target_vendor = "apple"), feature = "std"))]
     pub use crate::java_modified_utf8::thread_override_java_modified_utf8;
     pub use crate::java_modified_utf8::{decode_utf8_lossy, encode_java_modified_utf8};

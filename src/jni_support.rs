@@ -19,7 +19,7 @@ fn jni_uses_java_modified_utf8(env: &mut jni::Env<'_>) -> Result<bool> {
 /// [`configure_java_modified_utf8()`](crate::configure_java_modified_utf8) accordingly.
 ///
 /// # Errors
-/// Returns [`Error::JniError`](crate::Error::JniError) if the JNI calls fail.
+/// Returns an [`Error`](crate::Error) with [`ErrorKind::JniError`](crate::ErrorKind::JniError) if the JNI calls fail.
 #[cfg(all(unix, not(target_vendor = "apple")))]
 pub fn configure_java_modified_utf8_from_jni(env: &mut jni::Env<'_>) -> Result<()> {
     let uses_mutf8 = jni_uses_java_modified_utf8(env)?;

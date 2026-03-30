@@ -1,6 +1,6 @@
 #[cfg(target_vendor = "apple")]
-use crate::Error;
-use crate::Result;
+use crate::ErrorKind;
+use crate::error::ResultKind;
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
 use crate::unicode::case_fold;
 #[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
@@ -111,7 +111,7 @@ pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, [u8]> {
 /// # Errors
 /// Returns an error if the name is invalid.
 #[cfg(target_vendor = "apple")]
-pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
+pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
     use objc2_core_foundation::CFString;
 
     let cf = CFString::from_str(s);
@@ -121,11 +121,11 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
     // c_char and u8 have the same size; the cast is layout-compatible.
     let ok = unsafe { cf.file_system_representation(buf.as_mut_ptr().cast(), max_len) };
     if ok {
-        let nul = buf.iter().position(|&b| b == 0).ok_or(Error::OSError)?;
+        let nul = buf.iter().position(|&b| b == 0).ok_or(ErrorKind::OSError)?;
         let soo = SubstringOrOwned::new(&buf[..nul], s.as_bytes());
         Ok(soo.into_cow(Cow::Borrowed(s.as_bytes())))
     } else {
-        Err(Error::OSError)
+        Err(ErrorKind::OSError)
     }
 }
 
@@ -136,7 +136,7 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
 /// Returns an error if the name is invalid.
 #[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
 #[allow(clippy::unnecessary_wraps)]
-pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
+pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
     Ok(cow_str_to_bytes(cow(
         nfd(s).trim_start_matches('\u{FEFF}').chars(),
         s,
@@ -146,20 +146,20 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
 /// Apply the current OS's compatibility mapping.
 #[cfg(target_os = "windows")]
 #[allow(clippy::unnecessary_wraps)]
-pub fn os_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
+pub fn os_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
     Ok(windows_compatible_from_normalized_cs(s))
 }
 
 /// Apply the current OS's compatibility mapping.
 #[cfg(target_vendor = "apple")]
-pub fn os_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
+pub fn os_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
     apple_compatible_from_normalized_cs(s)
 }
 
 /// Apply the current OS's compatibility mapping.
 #[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
 #[allow(clippy::unnecessary_wraps)]
-pub fn os_compatible_from_normalized_cs(s: &str) -> Result<Cow<'_, [u8]>> {
+pub fn os_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
     Ok(crate::java_modified_utf8::encode_os_utf8(Cow::Borrowed(s)))
 }
 

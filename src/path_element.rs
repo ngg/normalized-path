@@ -429,7 +429,10 @@ where
         let original = original.into();
         let case_sensitivity = case_sensitivity.into();
 
-        let cs_normalized = normalize_cs(&original)?;
+        let with_original =
+            |kind: crate::ErrorKind| kind.into_error(String::from(original.as_ref()));
+
+        let cs_normalized = normalize_cs(&original).map_err(&with_original)?;
         let normalized = match CaseSensitivity::from(&case_sensitivity) {
             CaseSensitivity::Sensitive => SubstringOrOwned::new(&*cs_normalized, &*original),
             CaseSensitivity::Insensitive => SubstringOrOwned::new(
@@ -437,7 +440,7 @@ where
                 &*original,
             ),
         };
-        let os_bytes = os_compatible_from_normalized_cs(&cs_normalized)?;
+        let os_bytes = os_compatible_from_normalized_cs(&cs_normalized).map_err(&with_original)?;
         let os_compatible = SubstringOrOwned::new(&*os_bytes, original.as_bytes());
         Ok(Self {
             original,

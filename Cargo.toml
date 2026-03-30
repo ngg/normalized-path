@@ -23,7 +23,7 @@ maintenance = { status = "experimental" }
 
 [features]
 default = ["std"]
-std = ["thiserror/std", "simd_cesu8/std"]
+std = ["simd_cesu8/std"]
 jni = ["std", "dep:jni"]
 __test = []
 
@@ -35,7 +35,6 @@ icu_properties = { version = "~2.1.0", default-features = false, features = ["co
 jni = { version = "0.22.2", optional = true }
 memchr = { version = "2.0.0", default-features = false }
 simd_cesu8 = { version = "1.0.0", default-features = false }
-thiserror = { version = "2.0.0", default-features = false }
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 objc2-core-foundation = { version = "0.3.0", default-features = false, features = ["CFString"] }

@@ -1,8 +1,9 @@
 use alloc::borrow::Cow;
 
+use crate::ErrorKind;
+use crate::error::ResultKind;
 use crate::unicode::{case_fold, is_starter, is_whitespace, nfc, nfd};
 use crate::utils::cow;
-use crate::{Error, Result};
 
 /// `White_Space` property check extended with Control Pictures (U+2409–U+240D) that
 /// correspond to whitespace control characters (HT, LF, VT, FF, CR), and the BOM (U+FEFF).
@@ -94,7 +95,7 @@ pub fn map_control_chars(s: &str) -> Cow<'_, str> {
 /// # Errors
 ///
 /// Returns an error if the name is invalid.
-pub fn normalize_cs(name: &str) -> Result<Cow<'_, str>> {
+pub fn normalize_cs(name: &str) -> ResultKind<Cow<'_, str>> {
     let s = nfd(name);
     let s = trim_whitespace_like(&s);
     let s = map_fullwidth(s);
@@ -126,13 +127,13 @@ pub fn normalize_ci_from_normalized_cs(cs_normalized: &str) -> Cow<'_, str> {
 /// # Errors
 ///
 /// Returns an error if the name is invalid.
-pub fn validate_path_element(name: &str) -> Result<()> {
+pub fn validate_path_element(name: &str) -> ResultKind<()> {
     match name {
-        "" => Err(Error::Empty),
-        "." => Err(Error::CurrentDirectoryMarker),
-        ".." => Err(Error::ParentDirectoryMarker),
-        _ if name.contains('\0') => Err(Error::ContainsNullByte),
-        _ if name.contains('/') => Err(Error::ContainsForwardSlash),
+        "" => Err(ErrorKind::Empty),
+        "." => Err(ErrorKind::CurrentDirectoryMarker),
+        ".." => Err(ErrorKind::ParentDirectoryMarker),
+        _ if name.contains('\0') => Err(ErrorKind::ContainsNullByte),
+        _ if name.contains('/') => Err(ErrorKind::ContainsForwardSlash),
         _ => Ok(()),
     }
 }
@@ -149,7 +150,7 @@ mod tests {
         map_control_chars, map_fullwidth, map_turkish_i, normalize_ci_from_normalized_cs,
         normalize_cs, trim_whitespace_like, validate_path_element,
     };
-    use crate::Error;
+    use crate::ErrorKind;
     // --- trim_whitespace_like ---
 
     #[test]
@@ -661,11 +662,11 @@ mod tests {
     fn validate_null_byte_rejected() {
         assert!(matches!(
             validate_path_element("\0"),
-            Err(Error::ContainsNullByte)
+            Err(ErrorKind::ContainsNullByte)
         ));
         assert!(matches!(
             validate_path_element("a\0b"),
-            Err(Error::ContainsNullByte)
+            Err(ErrorKind::ContainsNullByte)
         ));
     }
 
@@ -673,7 +674,10 @@ mod tests {
 
     #[test]
     fn normalize_cs_null_byte_rejected() {
-        assert!(matches!(normalize_cs("a\0b"), Err(Error::ContainsNullByte)));
+        assert!(matches!(
+            normalize_cs("a\0b"),
+            Err(ErrorKind::ContainsNullByte)
+        ));
     }
 
     #[test]
