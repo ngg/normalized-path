@@ -120,7 +120,7 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, str>> 
     let cf = CFString::from_str(s);
     let max_len = cf.maximum_size_of_file_system_representation();
     let mut buf = alloc::vec![0u8; max_len as usize];
-    // Safety: buf is a valid, zero-initialized buffer of max_len bytes.
+    // SAFETY: buf is a valid, zero-initialized buffer of max_len bytes.
     // c_char and u8 have the same size; the cast is layout-compatible.
     let ok = unsafe { cf.file_system_representation(buf.as_mut_ptr().cast(), max_len) };
     if ok {

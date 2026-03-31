@@ -393,9 +393,11 @@ where
     ) -> Result<Self> {
         let cow_str = match original.into() {
             Cow::Borrowed(b) => String::from_utf8_lossy(b),
-            Cow::Owned(v) => match String::from_utf8(v) {
-                Ok(s) => Cow::Owned(s),
-                Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned().into(),
+            // TODO: replace with `Cow::Owned(String::from_utf8_lossy_owned(v))` once stable (rust#129436).
+            Cow::Owned(v) => match String::from_utf8_lossy(&v) {
+                // SAFETY: `String::from_utf8_lossy()` returned Borrowed, so the bytes are valid UTF-8.
+                Cow::Borrowed(_) => unsafe { Cow::Owned(String::from_utf8_unchecked(v)) },
+                Cow::Owned(s) => Cow::Owned(s),
             },
         };
         Self::with_case_sensitivity(cow_str, case_sensitivity)
