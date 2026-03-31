@@ -94,12 +94,12 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     );
     assert_eq!(
         pe.is_os_compatible(),
-        pe.original().as_bytes() == pe.os_compatible(),
+        pe.original() == pe.os_compatible(),
         "is_os_compatible mismatch\n\
          original:      {:?}\n\
          os_compatible: {:?}",
         pe.original(),
-        String::from_utf8_lossy(pe.os_compatible())
+        pe.os_compatible()
     );
 
     // is_reserved_on_windows must be stable under NFD and NFD→casefold→NFD.
@@ -153,16 +153,16 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     check("unmap_control_chars", &unmap_control_chars(input));
     check(
         "windows_compatible_from_normalized_cs",
-        core::str::from_utf8(&windows_compatible_from_normalized_cs(input)).unwrap(),
+        &*windows_compatible_from_normalized_cs(input),
     );
     check(
         "apple_compatible_from_normalized_cs",
-        core::str::from_utf8(&apple_compatible_from_normalized_cs(input).unwrap()).unwrap(),
+        &*apple_compatible_from_normalized_cs(input).unwrap(),
     );
     #[cfg(target_vendor = "apple")]
     check(
         "apple_compatible_from_normalized_cs_fallback",
-        core::str::from_utf8(&apple_compatible_from_normalized_cs_fallback(input)).unwrap(),
+        &*apple_compatible_from_normalized_cs_fallback(input),
     );
 
     let trimmed = input.trim();
@@ -256,9 +256,9 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
         check("fold_turkic", &cm.fold_turkic_string(case_input));
     }
 
-    // os_compatible round-trip: from_bytes(os_compatible) must produce the same normalized form.
-    let pe_rt = PathElement::from_bytes(pe.os_compatible(), cs)
-        .expect("assertion error: from_bytes failed on os_compatible output");
+    // os_compatible round-trip: new(os_compatible) must produce the same normalized form.
+    let pe_rt = PathElement::new(pe.os_compatible(), cs)
+        .expect("assertion error: new failed on os_compatible output");
     assert_eq!(
         normalized,
         pe_rt.normalized(),
@@ -267,7 +267,7 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
          os_compatible: {:?}\n\
          normalized:    {normalized:?}\n\
          got:           {:?}",
-        String::from_utf8_lossy(pe.os_compatible()),
+        pe.os_compatible(),
         pe_rt.normalized()
     );
 }

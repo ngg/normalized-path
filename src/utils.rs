@@ -30,14 +30,6 @@ impl Segment for [u8] {
     }
 }
 
-/// Convert a `Cow<str>` to `Cow<[u8]>` without copying when possible.
-pub fn cow_str_to_bytes(cow: Cow<'_, str>) -> Cow<'_, [u8]> {
-    match cow {
-        Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
-        Cow::Owned(s) => Cow::Owned(s.into_bytes()),
-    }
-}
-
 /// Compare `original` char-by-char against `converted`; return `Cow::Borrowed` when:
 /// - All characters match (returns full `original`),
 /// - `converted` is a prefix of `original` (returns borrowed prefix slice),
@@ -172,37 +164,7 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{SubstringOrOwned, cow, cow_str_to_bytes};
-
-    // --- cow_str_to_bytes ---
-
-    #[test]
-    fn cow_str_to_bytes_borrowed() {
-        let input = Cow::Borrowed("hello");
-        let result = cow_str_to_bytes(input);
-        assert!(matches!(result, Cow::Borrowed(_)));
-        assert_eq!(result.as_ref(), b"hello");
-    }
-
-    #[test]
-    fn cow_str_to_bytes_owned() {
-        let input = Cow::Owned("hello".to_string());
-        let result = cow_str_to_bytes(input);
-        assert!(matches!(result, Cow::Owned(_)));
-        assert_eq!(result.as_ref(), b"hello");
-    }
-
-    #[test]
-    fn cow_str_to_bytes_empty() {
-        let result = cow_str_to_bytes(Cow::Borrowed(""));
-        assert_eq!(result.as_ref(), b"");
-    }
-
-    #[test]
-    fn cow_str_to_bytes_multibyte() {
-        let result = cow_str_to_bytes(Cow::Borrowed("é"));
-        assert_eq!(result.as_ref(), "é".as_bytes());
-    }
+    use super::{SubstringOrOwned, cow};
 
     // --- cow ---
 

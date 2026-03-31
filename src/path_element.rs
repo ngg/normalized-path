@@ -49,8 +49,8 @@ pub struct PathElementGeneric<'a, S> {
     original: Cow<'a, str>,
     /// Relative to `original`.
     normalized: SubstringOrOwned<str>,
-    /// Relative to `original.as_bytes()`.
-    os_compatible: SubstringOrOwned<[u8]>,
+    /// Relative to `original`.
+    os_compatible: SubstringOrOwned<str>,
     case_sensitivity: S,
 }
 
@@ -62,10 +62,7 @@ where
         f.debug_struct("PathElement")
             .field("original", &self.original())
             .field("normalized", &self.normalized())
-            .field(
-                "os_compatible",
-                &String::from_utf8_lossy(self.os_compatible()),
-            )
+            .field("os_compatible", &self.os_compatible())
             .field("case_sensitivity", &self.case_sensitivity)
             .finish()
     }
@@ -437,8 +434,8 @@ where
                 &*original,
             ),
         };
-        let os_bytes = os_compatible_from_normalized_cs(&cs_normalized).map_err(&with_original)?;
-        let os_compatible = SubstringOrOwned::new(&*os_bytes, original.as_bytes());
+        let os_str = os_compatible_from_normalized_cs(&cs_normalized).map_err(&with_original)?;
+        let os_compatible = SubstringOrOwned::new(&*os_str, &*original);
         Ok(Self {
             original,
             normalized,
@@ -498,73 +495,38 @@ where
 
     /// Returns `true` if the OS-compatible form is identical to the original.
     pub fn is_os_compatible(&self) -> bool {
-        self.os_compatible.is_identity(self.original.as_bytes())
+        self.os_compatible.is_identity(&self.original)
     }
 
-    /// Returns the OS-compatible presentation form of the path element name
-    /// as a byte slice.
-    ///
-    /// The bytes are valid UTF-8 on all currently supported platforms, but the
-    /// return type is `&[u8]` to allow future platforms to produce non-UTF-8
-    /// output without a breaking API change.
+    /// Returns the OS-compatible presentation form of the path element name.
     ///
     /// ```
     /// # use normalized_path::PathElementCS;
     /// let pe = PathElementCS::new("hello.txt")?;
-    /// assert_eq!(pe.os_compatible(), b"hello.txt");
+    /// assert_eq!(pe.os_compatible(), "hello.txt");
     /// # Ok::<(), normalized_path::Error>(())
     /// ```
-    pub fn os_compatible(&self) -> &[u8] {
-        self.os_compatible.as_ref(self.original.as_bytes())
+    pub fn os_compatible(&self) -> &str {
+        self.os_compatible.as_ref(&self.original)
     }
 
-    /// Consumes `self` and returns the OS-compatible form as a [`Cow<[u8]>`](Cow).
-    pub fn into_os_compatible(self) -> Cow<'a, [u8]> {
-        let original_bytes = crate::utils::cow_str_to_bytes(self.original);
-        self.os_compatible.into_cow(original_bytes)
-    }
-
-    /// Returns the OS-compatible form as an [`OsStr`] reference.
-    #[cfg(all(feature = "std", unix))]
-    pub fn os_str(&self) -> &OsStr {
-        use std::os::unix::ffi::OsStrExt;
-        OsStr::from_bytes(self.os_compatible())
+    /// Consumes `self` and returns the OS-compatible form as a [`Cow<str>`](Cow).
+    pub fn into_os_compatible(self) -> Cow<'a, str> {
+        self.os_compatible.into_cow(self.original)
     }
 
     /// Returns the OS-compatible form as an [`OsStr`] reference.
-    #[cfg(all(feature = "std", not(unix)))]
-    #[allow(clippy::missing_panics_doc)]
+    #[cfg(feature = "std")]
     pub fn os_str(&self) -> &OsStr {
-        OsStr::new(
-            core::str::from_utf8(self.os_compatible())
-                .expect("assertion error: os_compatible is not valid UTF-8 on this platform"),
-        )
+        OsStr::new(self.os_compatible())
     }
 
     /// Consumes `self` and returns the OS-compatible form as a [`Cow<OsStr>`](Cow).
-    #[cfg(all(feature = "std", unix))]
-    pub fn into_os_str(self) -> Cow<'a, OsStr> {
-        use std::os::unix::ffi::OsStrExt as _;
-        use std::os::unix::ffi::OsStringExt as _;
-        match self.into_os_compatible() {
-            Cow::Borrowed(b) => Cow::Borrowed(OsStr::from_bytes(b)),
-            Cow::Owned(v) => Cow::Owned(OsString::from_vec(v)),
-        }
-    }
-
-    /// Consumes `self` and returns the OS-compatible form as a [`Cow<OsStr>`](Cow).
-    #[cfg(all(feature = "std", not(unix)))]
-    #[allow(clippy::missing_panics_doc)]
+    #[cfg(feature = "std")]
     pub fn into_os_str(self) -> Cow<'a, OsStr> {
         match self.into_os_compatible() {
-            Cow::Borrowed(b) => Cow::Borrowed(OsStr::new(
-                core::str::from_utf8(b)
-                    .expect("assertion error: os_compatible is not valid UTF-8 on this platform"),
-            )),
-            Cow::Owned(v) => Cow::Owned(OsString::from(
-                String::from_utf8(v)
-                    .expect("assertion error: os_compatible is not valid UTF-8 on this platform"),
-            )),
+            Cow::Borrowed(s) => Cow::Borrowed(OsStr::new(s)),
+            Cow::Owned(s) => Cow::Owned(OsString::from(s)),
         }
     }
 
@@ -724,7 +686,7 @@ mod tests {
         let pe = PathElementCI::new(Cow::Borrowed(input)).unwrap();
         assert_eq!(pe.original(), "H\tllo");
         assert_eq!(pe.normalized(), "h\u{2409}llo");
-        assert_eq!(pe.os_compatible(), "H\u{2409}llo".as_bytes());
+        assert_eq!(pe.os_compatible(), "H\u{2409}llo");
     }
 
     // CS "nul.e\u{0301}": normalized="nul.é" (NFC), os_compatible is platform-dependent.
@@ -736,11 +698,11 @@ mod tests {
         assert_eq!(pe.original(), "nul.e\u{0301}");
         assert_eq!(pe.normalized(), "nul.\u{00E9}");
         #[cfg(target_os = "windows")]
-        assert_eq!(pe.os_compatible(), "\u{FF4E}ul.\u{00E9}".as_bytes());
+        assert_eq!(pe.os_compatible(), "\u{FF4E}ul.\u{00E9}");
         #[cfg(target_vendor = "apple")]
-        assert_eq!(pe.os_compatible(), "nul.e\u{0301}".as_bytes());
+        assert_eq!(pe.os_compatible(), "nul.e\u{0301}");
         #[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
-        assert_eq!(pe.os_compatible(), "nul.\u{00E9}".as_bytes());
+        assert_eq!(pe.os_compatible(), "nul.\u{00E9}");
     }
 
     #[test]
@@ -784,7 +746,7 @@ mod tests {
         let pe = PathElementCS::new(Cow::Borrowed(input)).unwrap();
         let pres = pe.into_os_compatible();
         assert!(matches!(pres, Cow::Borrowed(_)));
-        assert_eq!(pres.as_ref(), b"hello.txt");
+        assert_eq!(pres.as_ref(), "hello.txt");
     }
 
     #[test]
@@ -809,7 +771,7 @@ mod tests {
         let pe = PathElementCI::new(Cow::Borrowed(input)).unwrap();
         let pres = pe.into_os_compatible();
         assert!(matches!(pres, Cow::Borrowed(_)));
-        assert_eq!(pres.as_ref(), b"hello.txt");
+        assert_eq!(pres.as_ref(), "hello.txt");
     }
 
     #[test]
@@ -967,7 +929,7 @@ mod tests {
         let owned = pe.into_owned();
         assert_eq!(owned.original(), "H\tllo");
         assert_eq!(owned.normalized(), "h\u{2409}llo");
-        assert_eq!(owned.os_compatible(), "H\u{2409}llo".as_bytes());
+        assert_eq!(owned.os_compatible(), "H\u{2409}llo");
     }
 
     #[test]
@@ -1127,7 +1089,7 @@ mod tests {
         let err: PathElementCI<'_> = PathElementCS::try_from(pe).unwrap_err();
         assert_eq!(err.original(), "Hello");
         assert_eq!(err.normalized(), "hello");
-        assert_eq!(err.os_compatible(), b"Hello");
+        assert_eq!(err.os_compatible(), "Hello");
     }
 
     #[test]
@@ -1215,7 +1177,7 @@ mod tests {
         let err: PathElementCS<'_> = PathElementCI::try_from(pe).unwrap_err();
         assert_eq!(err.original(), "Hello");
         assert_eq!(err.normalized(), "Hello");
-        assert_eq!(err.os_compatible(), b"Hello");
+        assert_eq!(err.os_compatible(), "Hello");
     }
 
     // --- into_owned preserves case_sensitivity ---
@@ -1648,19 +1610,19 @@ mod tests {
     #[test]
     fn os_compatible_supplementary_unchanged() {
         let pe = PathElementCS::new("file_😀.txt").unwrap();
-        assert_eq!(pe.os_compatible(), "file_😀.txt".as_bytes());
+        assert_eq!(pe.os_compatible(), "file_😀.txt");
     }
 
     #[test]
     fn os_compatible_supplementary_roundtrip() {
         let pe = PathElementCS::new("file_😀.txt").unwrap();
-        let pe2 = PathElementCS::from_bytes(pe.os_compatible()).unwrap();
+        let pe2 = PathElementCS::new(pe.os_compatible()).unwrap();
         assert_eq!(pe.normalized(), pe2.normalized());
     }
 
     #[test]
     fn os_compatible_multiple_supplementary() {
         let pe = PathElementCS::new("𐀀_𝄞_😀").unwrap();
-        assert_eq!(pe.os_compatible(), "𐀀_𝄞_😀".as_bytes());
+        assert_eq!(pe.os_compatible(), "𐀀_𝄞_😀");
     }
 }

@@ -5,10 +5,13 @@ use crate::error::ResultKind;
 use crate::unicode::case_fold;
 #[cfg(any(test, feature = "__test"))]
 use crate::unicode::nfd;
-#[cfg(target_vendor = "apple")]
-use crate::utils::SubstringOrOwned;
-#[cfg(any(target_os = "windows", test, feature = "__test"))]
-use crate::utils::{cow, cow_str_to_bytes};
+#[cfg(any(
+    target_os = "windows",
+    target_vendor = "apple",
+    test,
+    feature = "__test"
+))]
+use crate::utils::cow;
 use alloc::borrow::Cow;
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
 use alloc::format;
@@ -79,7 +82,7 @@ pub fn is_reserved_on_windows(name: &str) -> bool {
 /// Windows compatibility mapping: forbidden characters, trailing dots, and reserved names.
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
 #[allow(clippy::missing_panics_doc)]
-pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, [u8]> {
+pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, str> {
     // Step 1: Map forbidden characters
     let mut result = cow(s.chars().map(map_windows_forbidden), s);
 
@@ -102,7 +105,7 @@ pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, [u8]> {
         result = Cow::Owned(format!("{fullwidth}{}", &owned[first.len_utf8()..]));
     }
 
-    cow_str_to_bytes(result)
+    result
 }
 
 /// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
@@ -111,7 +114,7 @@ pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, [u8]> {
 /// # Errors
 /// Returns an error if the name is invalid.
 #[cfg(target_vendor = "apple")]
-pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
+pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, str>> {
     use objc2_core_foundation::CFString;
 
     let cf = CFString::from_str(s);
@@ -125,8 +128,9 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>>
             .iter()
             .position(|&b| b == 0)
             .ok_or(ErrorKind::GetFileSystemRepresentationError)?;
-        let soo = SubstringOrOwned::new(&buf[..nul], s.as_bytes());
-        Ok(soo.into_cow(Cow::Borrowed(s.as_bytes())))
+        let result = core::str::from_utf8(&buf[..nul])
+            .map_err(|_| ErrorKind::GetFileSystemRepresentationError)?;
+        Ok(cow(result.chars(), s))
     } else {
         Err(ErrorKind::GetFileSystemRepresentationError)
     }
@@ -139,8 +143,8 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>>
 /// `apple_compatible_from_normalized_cs` on Apple targets as well.
 #[cfg(any(test, feature = "__test"))]
 #[must_use]
-pub fn apple_compatible_from_normalized_cs_fallback(s: &str) -> Cow<'_, [u8]> {
-    cow_str_to_bytes(cow(nfd(s).trim_start_matches('\u{FEFF}').chars(), s))
+pub fn apple_compatible_from_normalized_cs_fallback(s: &str) -> Cow<'_, str> {
+    cow(nfd(s).trim_start_matches('\u{FEFF}').chars(), s)
 }
 
 /// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
@@ -151,28 +155,28 @@ pub fn apple_compatible_from_normalized_cs_fallback(s: &str) -> Cow<'_, [u8]> {
 /// This fallback is infallible but returns `ResultKind` for API compatibility.
 #[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
 #[allow(clippy::unnecessary_wraps)]
-pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
+pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, str>> {
     Ok(apple_compatible_from_normalized_cs_fallback(s))
 }
 
 /// Apply the current OS's compatibility mapping.
 #[cfg(target_os = "windows")]
 #[allow(clippy::unnecessary_wraps)]
-pub fn os_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
+pub fn os_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, str>> {
     Ok(windows_compatible_from_normalized_cs(s))
 }
 
 /// Apply the current OS's compatibility mapping.
 #[cfg(target_vendor = "apple")]
-pub fn os_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
+pub fn os_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, str>> {
     apple_compatible_from_normalized_cs(s)
 }
 
 /// Apply the current OS's compatibility mapping.
 #[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
 #[allow(clippy::unnecessary_wraps)]
-pub fn os_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
-    Ok(Cow::Borrowed(s.as_bytes()))
+pub fn os_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, str>> {
+    Ok(Cow::Borrowed(s))
 }
 
 #[cfg(test)]
@@ -195,7 +199,7 @@ mod tests {
     fn win_forbidden_chars() {
         assert_eq!(
             windows_compatible_from_normalized_cs("a<b>c").as_ref(),
-            "a\u{FF1C}b\u{FF1E}c".as_bytes()
+            "a\u{FF1C}b\u{FF1E}c"
         );
     }
 
@@ -203,7 +207,7 @@ mod tests {
     fn win_all_forbidden() {
         assert_eq!(
             windows_compatible_from_normalized_cs("<>:\"\\|?*").as_ref(),
-            "\u{FF1C}\u{FF1E}\u{FF1A}\u{FF02}\u{FF3C}\u{FF5C}\u{FF1F}\u{FF0A}".as_bytes()
+            "\u{FF1C}\u{FF1E}\u{FF1A}\u{FF02}\u{FF3C}\u{FF5C}\u{FF1F}\u{FF0A}"
         );
     }
 
@@ -211,7 +215,7 @@ mod tests {
     fn win_trailing_dot() {
         assert_eq!(
             windows_compatible_from_normalized_cs("file.").as_ref(),
-            "file\u{FF0E}".as_bytes()
+            "file\u{FF0E}"
         );
     }
 
@@ -219,7 +223,7 @@ mod tests {
     fn win_trailing_dots() {
         assert_eq!(
             windows_compatible_from_normalized_cs("file..").as_ref(),
-            "file.\u{FF0E}".as_bytes()
+            "file.\u{FF0E}"
         );
     }
 
@@ -227,7 +231,7 @@ mod tests {
     fn win_trailing_space_dot() {
         assert_eq!(
             windows_compatible_from_normalized_cs("file .").as_ref(),
-            "file \u{FF0E}".as_bytes()
+            "file \u{FF0E}"
         );
     }
 
@@ -235,7 +239,7 @@ mod tests {
     fn win_reserved_presentation_nul() {
         assert_eq!(
             windows_compatible_from_normalized_cs("nul").as_ref(),
-            "\u{FF4E}ul".as_bytes()
+            "\u{FF4E}ul"
         );
     }
 
@@ -243,7 +247,7 @@ mod tests {
     fn win_reserved_presentation_with_ext() {
         assert_eq!(
             windows_compatible_from_normalized_cs("nul.txt").as_ref(),
-            "\u{FF4E}ul.txt".as_bytes()
+            "\u{FF4E}ul.txt"
         );
     }
 
@@ -251,7 +255,7 @@ mod tests {
     fn win_reserved_presentation_com1() {
         assert_eq!(
             windows_compatible_from_normalized_cs("COM1").as_ref(),
-            "\u{FF23}OM1".as_bytes()
+            "\u{FF23}OM1"
         );
     }
 
@@ -259,7 +263,7 @@ mod tests {
     fn win_normal_unchanged() {
         let result = windows_compatible_from_normalized_cs("hello.txt");
         assert!(matches!(result, Cow::Borrowed(_)));
-        assert_eq!(result.as_ref(), b"hello.txt");
+        assert_eq!(result.as_ref(), "hello.txt");
     }
 
     // --- is_reserved_on_windows ---
@@ -362,7 +366,7 @@ mod tests {
             apple_compatible_from_normalized_cs("\u{FEFF}\u{00E9}")
                 .unwrap()
                 .as_ref(),
-            "e\u{0301}".as_bytes()
+            "e\u{0301}"
         );
     }
 
@@ -370,7 +374,7 @@ mod tests {
     fn apple_ascii_unchanged() {
         let result = apple_compatible_from_normalized_cs("hello").unwrap();
         assert!(matches!(result, Cow::Borrowed(_)));
-        assert_eq!(result.as_ref(), b"hello");
+        assert_eq!(result.as_ref(), "hello");
     }
 
     #[test]
@@ -378,7 +382,7 @@ mod tests {
         let input = "\u{FEFF}hello";
         let result = apple_compatible_from_normalized_cs(input).unwrap();
         assert!(matches!(result, Cow::Borrowed(_)));
-        assert_eq!(result.as_ref(), b"hello");
+        assert_eq!(result.as_ref(), "hello");
         assert!(core::ptr::eq(
             result.as_ptr(),
             input["\u{FEFF}".len()..].as_ptr()
@@ -393,7 +397,7 @@ mod tests {
             os_compatible_from_normalized_cs("hello.txt")
                 .unwrap()
                 .as_ref(),
-            b"hello.txt"
+            "hello.txt"
         );
     }
 
@@ -401,35 +405,35 @@ mod tests {
     fn os_compatible_from_normalized_cs_forbidden_chars() {
         let result = os_compatible_from_normalized_cs("a<b").unwrap();
         #[cfg(target_os = "windows")]
-        assert_eq!(result.as_ref(), "a\u{FF1C}b".as_bytes());
+        assert_eq!(result.as_ref(), "a\u{FF1C}b");
         #[cfg(not(target_os = "windows"))]
-        assert_eq!(result.as_ref(), b"a<b");
+        assert_eq!(result.as_ref(), "a<b");
     }
 
     #[test]
     fn os_compatible_from_normalized_cs_reserved_name() {
         let result = os_compatible_from_normalized_cs("nul").unwrap();
         #[cfg(target_os = "windows")]
-        assert_eq!(result.as_ref(), "\u{FF4E}ul".as_bytes());
+        assert_eq!(result.as_ref(), "\u{FF4E}ul");
         #[cfg(not(target_os = "windows"))]
-        assert_eq!(result.as_ref(), b"nul");
+        assert_eq!(result.as_ref(), "nul");
     }
 
     #[test]
     fn os_compatible_from_normalized_cs_nfc_input() {
         let result = os_compatible_from_normalized_cs("\u{00E9}").unwrap();
         #[cfg(target_vendor = "apple")]
-        assert_eq!(result.as_ref(), "e\u{0301}".as_bytes());
+        assert_eq!(result.as_ref(), "e\u{0301}");
         #[cfg(not(target_vendor = "apple"))]
-        assert_eq!(result.as_ref(), "\u{00E9}".as_bytes());
+        assert_eq!(result.as_ref(), "\u{00E9}");
     }
 
     #[test]
     fn os_compatible_from_normalized_cs_bom() {
         let result = os_compatible_from_normalized_cs("\u{FEFF}hello").unwrap();
         #[cfg(target_vendor = "apple")]
-        assert_eq!(result.as_ref(), b"hello");
+        assert_eq!(result.as_ref(), "hello");
         #[cfg(not(target_vendor = "apple"))]
-        assert_eq!(result.as_ref(), "\u{FEFF}hello".as_bytes());
+        assert_eq!(result.as_ref(), "\u{FEFF}hello");
     }
 }
