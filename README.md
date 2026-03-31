@@ -1,5 +1,6 @@
 # normalized-path
 
+[![CI](https://github.com/ngg/normalized-path/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ngg/normalized-path/actions/workflows/ci.yml?query=branch%3Amain)
 [![crates.io](https://img.shields.io/crates/v/normalized-path.svg)](https://crates.io/crates/normalized-path)
 [![docs.rs](https://docs.rs/normalized-path/badge.svg)](https://docs.rs/normalized-path)
 

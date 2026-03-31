@@ -8,10 +8,11 @@ name = "normalized-path"
 version = "0.0.1"
 description = "Opinionated cross-platform, optionally case-insensitive path normalization"
 repository = "https://github.com/ngg/normalized-path"
+documentation = "https://docs.rs/normalized-path"
 publish = false
 edition = "2024"
 rust-version = "1.85"
-license = "Apache-2.0 OR MIT"
+license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [package.metadata.docs.rs]
