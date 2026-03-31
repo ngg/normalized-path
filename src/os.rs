@@ -172,7 +172,7 @@ pub fn os_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
 #[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
 #[allow(clippy::unnecessary_wraps)]
 pub fn os_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, [u8]>> {
-    Ok(crate::java_modified_utf8::encode_os_utf8(Cow::Borrowed(s)))
+    Ok(Cow::Borrowed(s.as_bytes()))
 }
 
 #[cfg(test)]

@@ -25,10 +25,6 @@ pub enum ErrorKind {
     /// Apple's `CFStringGetFileSystemRepresentation` failed.
     #[cfg(target_vendor = "apple")]
     GetFileSystemRepresentationError,
-
-    /// A JNI operation failed.
-    #[cfg(feature = "jni")]
-    JniError(jni::errors::Error),
 }
 
 impl ErrorKind {
@@ -53,8 +49,6 @@ impl core::fmt::Display for ErrorKind {
             Self::GetFileSystemRepresentationError => {
                 f.write_str("CFStringGetFileSystemRepresentation failed")
             }
-            #[cfg(feature = "jni")]
-            Self::JniError(e) => write!(f, "JNI error: {e}"),
         }
     }
 }
@@ -107,22 +101,7 @@ impl core::fmt::Display for Error {
     }
 }
 
-impl core::error::Error for Error {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        match &self.kind {
-            #[cfg(feature = "jni")]
-            ErrorKind::JniError(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-#[cfg(feature = "jni")]
-impl From<jni::errors::Error> for Error {
-    fn from(err: jni::errors::Error) -> Self {
-        ErrorKind::JniError(err).into_error(String::new())
-    }
-}
+impl core::error::Error for Error {}
 
 /// A [`Result`](core::result::Result) type alias using this crate's [`Error`].
 pub type Result<T> = core::result::Result<T, Error>;
@@ -142,7 +121,7 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{Error, ErrorKind};
+    use super::ErrorKind;
 
     #[test]
     fn error_kind_display() {
@@ -203,13 +182,6 @@ mod tests {
         let debug = format!("{err:?}");
         assert!(debug.contains("Empty"));
         assert!(debug.contains('.'));
-    }
-
-    #[test]
-    fn error_source_is_none_for_non_jni() {
-        use core::error::Error as _;
-        let err: Error = ErrorKind::Empty.into_error(String::new());
-        assert!(err.source().is_none());
     }
 
     #[test]

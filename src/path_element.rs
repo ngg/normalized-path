@@ -378,13 +378,10 @@ where
         case_sensitivity: impl Into<S>,
     ) -> Result<Self> {
         let cow_str = match original.into() {
-            Cow::Borrowed(b) => crate::java_modified_utf8::decode_utf8_lossy(b),
+            Cow::Borrowed(b) => String::from_utf8_lossy(b),
             Cow::Owned(v) => match String::from_utf8(v) {
                 Ok(s) => Cow::Owned(s),
-                Err(e) => {
-                    let decoded = crate::java_modified_utf8::decode_utf8_lossy(e.as_bytes());
-                    Cow::Owned(decoded.into_owned())
-                }
+                Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned().into(),
             },
         };
         Self::with_case_sensitivity(cow_str, case_sensitivity)
@@ -508,8 +505,8 @@ where
     /// as a byte slice.
     ///
     /// The bytes are valid UTF-8 on all currently supported platforms, but the
-    /// return type is `&[u8]` to allow future platforms (e.g., Android with
-    /// CESU-8) to produce non-UTF-8 output without a breaking API change.
+    /// return type is `&[u8]` to allow future platforms to produce non-UTF-8
+    /// output without a breaking API change.
     ///
     /// ```
     /// # use normalized_path::PathElementCS;
@@ -1598,94 +1595,51 @@ mod tests {
             assert_eq!(pe.case_sensitivity(), CaseSensitivity::Sensitive);
         }
 
-        // --- Modified UTF-8 / CESU-8 decoding ---
+        // --- Invalid byte decoding ---
 
         #[test]
         fn from_bytes_overlong_null() {
-            // 0xC0 0x80 is an overlong encoding — replaced with U+FFFD per byte,
-            // not decoded as null.
+            // 0xC0 0x80 is an overlong encoding — replaced with U+FFFD per byte.
             let input: &[u8] = &[0x61, 0xC0, 0x80, 0x62]; // "a" + overlong + "b"
             let pe = PathElementCS::from_bytes(input).unwrap();
             assert_eq!(pe.original(), "a\u{FFFD}\u{FFFD}b");
         }
 
         #[test]
-        fn from_bytes_cesu8_surrogate_pair() {
-            // U+1F600 (😀) as CESU-8: ED A0 BD ED B8 80
+        fn from_bytes_surrogate_bytes_replaced() {
+            // ED A0 BD ED B8 80 are surrogate half bytes — not valid UTF-8,
+            // each invalid segment replaced with U+FFFD.
             let input: &[u8] = &[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80];
             let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "😀");
-            assert_eq!(pe.normalized(), "😀");
-        }
-
-        #[test]
-        fn from_bytes_cesu8_in_filename() {
-            // "file_" + U+1F600 as CESU-8 + ".txt"
-            let mut input = b"file_".to_vec();
-            input.extend_from_slice(&[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]);
-            input.extend_from_slice(b".txt");
-            let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "file_😀.txt");
-            assert_eq!(pe.normalized(), "file_😀.txt");
-        }
-
-        #[test]
-        fn from_bytes_cesu8_case_insensitive() {
-            // CESU-8 input normalized in CI mode
-            let mut input = b"File_".to_vec();
-            input.extend_from_slice(&[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]); // 😀
-            input.extend_from_slice(b".TXT");
-            let pe = PathElementCI::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "File_😀.TXT");
-            assert_eq!(pe.normalized(), "file_😀.txt");
+            assert!(pe.original().contains('\u{FFFD}'));
         }
 
         #[test]
         fn from_bytes_lone_high_surrogate_replaced() {
-            // ED A0 80 (high surrogate U+D800 without low) — each byte replaced
-            let input: &[u8] = &[0x61, 0xED, 0xA0, 0x80, 0x62]; // "a" + lone high + "b"
+            let input: &[u8] = &[0x61, 0xED, 0xA0, 0x80, 0x62];
             let pe = PathElementCS::from_bytes(input).unwrap();
             assert_eq!(pe.original(), "a\u{FFFD}\u{FFFD}\u{FFFD}b");
         }
 
         #[test]
         fn from_bytes_lone_low_surrogate_replaced() {
-            // ED B0 80 (low surrogate U+DC00 without high) — each byte replaced
-            let input: &[u8] = &[0x61, 0xED, 0xB0, 0x80, 0x62]; // "a" + lone low + "b"
+            let input: &[u8] = &[0x61, 0xED, 0xB0, 0x80, 0x62];
             let pe = PathElementCS::from_bytes(input).unwrap();
             assert_eq!(pe.original(), "a\u{FFFD}\u{FFFD}\u{FFFD}b");
         }
 
         #[test]
-        fn from_bytes_cesu8_matches_direct_utf8() {
-            // Same character via CESU-8 and direct UTF-8 should produce equal PathElements.
-            let cesu8: &[u8] = &[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]; // 😀 as CESU-8
-            let utf8: &[u8] = "😀".as_bytes();
-            let pe_cesu = PathElementCS::from_bytes(cesu8).unwrap();
-            let pe_utf8 = PathElementCS::from_bytes(utf8).unwrap();
-            assert_eq!(pe_cesu, pe_utf8);
-        }
-
-        #[test]
         fn from_bytes_overlong_null_only() {
-            // 0xC0 0x80 is an overlong encoding — each byte replaced with U+FFFD.
             let input: &[u8] = &[0xC0, 0x80];
             let pe = PathElementCS::from_bytes(input).unwrap();
             assert_eq!(pe.original(), "\u{FFFD}\u{FFFD}");
         }
 
         #[test]
-        fn from_bytes_mixed_cesu8_and_invalid() {
-            // Valid ASCII + CESU-8 emoji + invalid byte: simd_cesu8::decode fails,
-            // falls back to from_utf8_lossy which replaces surrogate pair bytes too.
-            let mut input = b"hi".to_vec();
-            input.extend_from_slice(&[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]); // 😀
-            input.push(0xFF); // invalid
+        fn from_bytes_invalid_byte_replaced() {
+            let input: &[u8] = &[0x68, 0x69, 0xFF]; // "hi" + invalid
             let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(
-                pe.original(),
-                "hi\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}"
-            );
+            assert_eq!(pe.original(), "hi\u{FFFD}");
         }
     }
 

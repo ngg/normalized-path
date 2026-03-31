@@ -49,32 +49,19 @@
 //! - Path separators and multi-component paths are not handled.  This crate
 //!   operates on a single path element (one name between separators).  Support
 //!   for full paths may be added in a future version.
+//! - Android versions before 6 (API level 23) are not supported.  Earlier
+//!   versions used Java Modified UTF-8 for filesystem paths, encoding
+//!   supplementary characters as CESU-8 surrogate pairs.
 //!
 //! # Normalization pipeline
 //!
-//! Every path element name goes through the following steps during construction.
-//! When constructing from bytes (`from_bytes`, `from_os_str`), an additional
-//! decoding step is applied first:
+//! Every path element name goes through the following steps during construction:
 //!
-//! 0. **Byte decoding** -- the input bytes are decoded to a string in three
-//!    stages:
-//!
-//!    1. **UTF-8** -- if the input is valid UTF-8, it is used as-is.
-//!    2. **CESU-8** -- otherwise, CESU-8 decoding is attempted, which accepts
-//!       surrogate pairs and decodes them as the corresponding supplementary
-//!       character.
-//!    3. **Lossy UTF-8** -- if CESU-8 decoding also fails (e.g. because the
-//!       input contains a mix of valid and invalid bytes), [`String::from_utf8_lossy()`]
-//!       is used, which preserves valid UTF-8 sequences and replaces invalid
-//!       bytes with U+FFFD.
-//!
-//!    Invalid bytes can be encountered on Unix filesystems, which allow
-//!    arbitrary bytes except `/` and `\0` in names, and on Windows, where
-//!    filenames are WTF-16 and may contain unpaired surrogates.  The CESU-8
-//!    handling is needed because older Android versions used Java's Modified
-//!    UTF-8 for filesystem paths, encoding supplementary characters as CESU-8
-//!    surrogate pairs.
-//!    When constructing from a string ([`PathElementCS::new()`]), this step is skipped.
+//! 0. **Byte decoding** (only for `from_bytes`/`from_os_str`) --
+//!    [`String::from_utf8_lossy()`] is applied, replacing invalid byte sequences
+//!    with U+FFFD.  Invalid bytes can be encountered on Unix filesystems, which
+//!    allow arbitrary bytes except `/` and `\0` in names, and on Windows, where
+//!    filenames are WTF-16 and may contain unpaired surrogates.
 //!
 //! 1. **NFD decomposition** -- canonical decomposition to reorder combining marks.
 //!    This is needed because macOS stores filenames in a form close to NFD, so an
@@ -142,12 +129,6 @@
 //!   and their superscript-digit variants).
 //! - **Apple (macOS/iOS)**: converted using [`CFStringGetFileSystemRepresentation`](https://developer.apple.com/documentation/corefoundation/cfstringgetfilesystemrepresentation(_:_:_:))
 //!   as recommended by Apple's documentation (produces a representation similar to NFD).
-//! - **Android (Java Modified UTF-8)**: older Android versions used Java's Modified
-//!   UTF-8 for filesystem paths, encoding supplementary characters as CESU-8
-//!   surrogate pairs. When [`configure_java_modified_utf8(true)`](configure_java_modified_utf8) is called, the
-//!   OS-compatible form uses this encoding. With the `jni` feature enabled,
-//!   [`configure_java_modified_utf8_from_jni()`] can auto-detect the runtime encoding
-//!   and set the flag accordingly.
 //! - **Other platforms**: the OS-compatible form is identical to the case-sensitive
 //!   normalized form.
 //!
@@ -240,8 +221,8 @@
 //! normalized-path = { version = "...", default-features = false }
 //! ```
 //!
-//! The `std` feature enables `OsStr`/`OsString` constructors and the
-//! [`std::error::Error`] impl on [`Error`]. The `alloc` crate is always required.
+//! The `std` feature enables `from_os_str` constructors and
+//! `os_str`/`into_os_str` accessors. The `alloc` crate is always required.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -251,9 +232,6 @@ extern crate alloc;
 
 mod case_sensitivity;
 mod error;
-mod java_modified_utf8;
-#[cfg(feature = "jni")]
-mod jni_support;
 mod normalize;
 mod os;
 mod path_element;
@@ -261,21 +239,12 @@ mod unicode;
 mod utils;
 
 pub use case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
-#[cfg(all(unix, not(target_vendor = "apple")))]
-pub use java_modified_utf8::configure_java_modified_utf8;
-pub use java_modified_utf8::is_using_java_modified_utf8;
-#[cfg(all(feature = "jni", all(unix, not(target_vendor = "apple"))))]
-pub use jni_support::configure_java_modified_utf8_from_jni;
-pub use path_element::{PathElement, PathElementCI, PathElementCS, PathElementGeneric};
-
 pub use error::{Error, ErrorKind, Result};
+pub use path_element::{PathElement, PathElementCI, PathElementCS, PathElementGeneric};
 
 #[cfg(any(feature = "__test", test))]
 pub mod test_helpers {
     pub use crate::error::ResultKind;
-    #[cfg(all(unix, not(target_vendor = "apple"), feature = "std"))]
-    pub use crate::java_modified_utf8::thread_override_java_modified_utf8;
-    pub use crate::java_modified_utf8::{decode_utf8_lossy, encode_java_modified_utf8};
     pub use crate::normalize::{
         is_whitespace_like, map_control_chars, map_fullwidth, map_turkish_i,
         normalize_ci_from_normalized_cs, normalize_cs, trim_whitespace_like, validate_path_element,

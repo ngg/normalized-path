@@ -6,10 +6,9 @@ use libfuzzer_sys::fuzz_target;
 #[cfg(target_vendor = "apple")]
 use normalized_path::test_helpers::apple_compatible_from_normalized_cs_fallback;
 use normalized_path::test_helpers::{
-    apple_compatible_from_normalized_cs, case_fold, decode_utf8_lossy, encode_java_modified_utf8,
-    is_reserved_on_windows, map_control_chars, map_fullwidth, map_turkish_i, nfc, nfd,
-    normalize_ci_from_normalized_cs, normalize_cs, trim_whitespace_like, validate_path_element,
-    windows_compatible_from_normalized_cs,
+    apple_compatible_from_normalized_cs, case_fold, is_reserved_on_windows, map_control_chars,
+    map_fullwidth, map_turkish_i, nfc, nfd, normalize_ci_from_normalized_cs, normalize_cs,
+    trim_whitespace_like, validate_path_element, windows_compatible_from_normalized_cs,
 };
 use normalized_path::{CaseSensitivity, PathElement};
 
@@ -43,11 +42,11 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     let normalized = pe.normalized();
     validate_path_element(normalized).expect("validate_path_element must accept normalized output");
 
-    // decode_utf8_lossy of the raw data must produce the same original.
-    let decoded = decode_utf8_lossy(data);
+    // from_utf8_lossy of the raw data must produce the same original.
+    let decoded = String::from_utf8_lossy(data);
     assert_eq!(
         input, &*decoded,
-        "from_bytes original does not match decode_utf8_lossy\n\
+        "from_bytes original does not match from_utf8_lossy\n\
          data:    {data:?}\n\
          original: {input:?}\n\
          decoded:  {decoded:?}"
@@ -55,11 +54,11 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
 
     // Constructing from the decoded string must produce the same normalized form.
     let pe_decoded = PathElement::new(&*decoded, cs)
-        .expect("assertion error: PathElement::new failed on decode_utf8_lossy output");
+        .expect("assertion error: PathElement::new failed on from_utf8_lossy output");
     assert_eq!(
         normalized,
         pe_decoded.normalized(),
-        "normalize mismatch between from_bytes and new(decode_utf8_lossy(data))\n\
+        "normalize mismatch between from_bytes and new(from_utf8_lossy(data))\n\
          data:    {data:?}\n\
          from_bytes normalized: {normalized:?}\n\
          new normalized:        {:?}",
@@ -82,22 +81,6 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
              data: {data:?}"
         );
     }
-
-    // Converting the original to Java Modified UTF-8 and back via from_bytes
-    // must produce the same normalized form.
-    let mutf8 = encode_java_modified_utf8(input);
-    let pe_mutf8 = PathElement::from_bytes(&*mutf8, cs)
-        .expect("assertion error: PathElement::from_bytes failed on MUTF-8 encoded input");
-    assert_eq!(
-        normalized,
-        pe_mutf8.normalized(),
-        "normalize mismatch after encode_java_modified_utf8 roundtrip\n\
-         input:   {input:?}\n\
-         mutf8:   {mutf8:?}\n\
-         normalized:       {normalized:?}\n\
-         got:              {:?}",
-        pe_mutf8.normalized()
-    );
 
     // is_normalized and is_os_compatible must agree with value comparison.
     assert_eq!(

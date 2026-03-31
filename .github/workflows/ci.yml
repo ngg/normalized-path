@@ -24,10 +24,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build
       - run: cargo build --no-default-features
-      - run: cargo build --features jni
       - run: cargo test
       - run: cargo test --no-default-features
-      - run: cargo test --features jni
 
   clippy:
     runs-on: ubuntu-latest
@@ -59,10 +57,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build
       - run: cargo build --no-default-features
-      - run: cargo build --features jni
       - run: cargo test
       - run: cargo test --no-default-features
-      - run: cargo test --features jni
 
   wasm32-unknown-unknown:
     runs-on: ubuntu-latest
