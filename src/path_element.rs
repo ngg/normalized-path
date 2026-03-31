@@ -54,10 +54,7 @@ pub struct PathElementGeneric<'a, S> {
     case_sensitivity: S,
 }
 
-impl<S: core::fmt::Debug> core::fmt::Debug for PathElementGeneric<'_, S>
-where
-    for<'s> CaseSensitivity: From<&'s S>,
-{
+impl<S: core::fmt::Debug> core::fmt::Debug for PathElementGeneric<'_, S> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("PathElement")
             .field("original", &self.original())
@@ -443,6 +440,13 @@ where
         })
     }
 
+    /// Returns the case sensitivity of this path element as a [`CaseSensitivity`] enum.
+    pub fn case_sensitivity(&self) -> CaseSensitivity {
+        CaseSensitivity::from(&self.case_sensitivity)
+    }
+}
+
+impl<'a, S> PathElementGeneric<'a, S> {
     /// Returns the original input string, before any normalization.
     ///
     /// ```
@@ -527,11 +531,6 @@ where
             Cow::Borrowed(s) => Cow::Borrowed(OsStr::new(s)),
             Cow::Owned(s) => Cow::Owned(OsString::from(s)),
         }
-    }
-
-    /// Returns the case sensitivity of this path element as a [`CaseSensitivity`] enum.
-    pub fn case_sensitivity(&self) -> CaseSensitivity {
-        CaseSensitivity::from(&self.case_sensitivity)
     }
 
     /// Returns `true` if the original string is borrowed (not owned).
