@@ -1,4 +1,4 @@
-use alloc::borrow::Cow;
+use alloc::borrow::{Cow, ToOwned};
 use alloc::string::String;
 
 /// Compare `original` char-by-char against `converted`; return `Cow::Borrowed` when:
