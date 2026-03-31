@@ -1,3 +1,7 @@
+use alloc::borrow::Cow;
+#[cfg(any(target_os = "windows", test, feature = "__test"))]
+use alloc::format;
+
 #[cfg(target_vendor = "apple")]
 use crate::ErrorKind;
 use crate::error::ResultKind;
@@ -12,9 +16,6 @@ use crate::unicode::nfd;
     feature = "__test"
 ))]
 use crate::utils::cow;
-use alloc::borrow::Cow;
-#[cfg(any(target_os = "windows", test, feature = "__test"))]
-use alloc::format;
 
 /// Windows reserved device names (case-folded, checked against case-folded stem before first dot).
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
