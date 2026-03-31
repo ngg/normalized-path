@@ -48,9 +48,9 @@ pub type PathElement<'a> = PathElementGeneric<'a, CaseSensitivity>;
 pub struct PathElementGeneric<'a, S> {
     original: Cow<'a, str>,
     /// Relative to `original`.
-    normalized: SubstringOrOwned<str>,
+    normalized: SubstringOrOwned,
     /// Relative to `original`.
-    os_compatible: SubstringOrOwned<str>,
+    os_compatible: SubstringOrOwned,
     case_sensitivity: S,
 }
 
@@ -428,14 +428,13 @@ where
 
         let cs_normalized = normalize_cs(&original).map_err(&with_original)?;
         let normalized = match CaseSensitivity::from(&case_sensitivity) {
-            CaseSensitivity::Sensitive => SubstringOrOwned::new(&*cs_normalized, &*original),
-            CaseSensitivity::Insensitive => SubstringOrOwned::new(
-                &*normalize_ci_from_normalized_cs(&cs_normalized),
-                &*original,
-            ),
+            CaseSensitivity::Sensitive => SubstringOrOwned::new(&cs_normalized, &original),
+            CaseSensitivity::Insensitive => {
+                SubstringOrOwned::new(&normalize_ci_from_normalized_cs(&cs_normalized), &original)
+            }
         };
         let os_str = os_compatible_from_normalized_cs(&cs_normalized).map_err(&with_original)?;
-        let os_compatible = SubstringOrOwned::new(&*os_str, &*original);
+        let os_compatible = SubstringOrOwned::new(&os_str, &original);
         Ok(Self {
             original,
             normalized,
