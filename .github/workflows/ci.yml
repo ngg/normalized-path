@@ -93,5 +93,13 @@ jobs:
       - run: cargo install wasmtime-cli
       - run: cargo test --target wasm32-wasip1
 
-  fuzz:
+  fuzz-linux:
     uses: ./.github/workflows/fuzz.yml
+    with:
+      runs-on: ubuntu-latest
+
+  fuzz-macos:
+    needs: fuzz-linux
+    uses: ./.github/workflows/fuzz.yml
+    with:
+      runs-on: macos-latest

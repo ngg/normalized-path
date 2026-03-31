@@ -3,20 +3,20 @@ name: Fuzz
 on:
   workflow_call:
     inputs:
-      linux-timeout:
-        type: number
-        default: 60
-      macos-timeout:
+      runs-on:
+        type: string
+        required: true
+      timeout:
         type: number
         default: 60
   workflow_dispatch:
     inputs:
-      linux-timeout:
-        description: "Linux fuzz timeout in seconds"
-        type: number
-        default: 60
-      macos-timeout:
-        description: "macOS fuzz timeout in seconds"
+      runs-on:
+        description: "Runner (e.g. ubuntu-latest, macos-latest)"
+        type: string
+        default: ubuntu-latest
+      timeout:
+        description: "Fuzz timeout in seconds"
         type: number
         default: 60
 
@@ -27,8 +27,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  fuzz-linux:
-    runs-on: ubuntu-latest
+  fuzz:
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@nightly
@@ -38,7 +38,7 @@ jobs:
       - uses: actions/cache/restore@v5
         with:
           path: fuzz/corpus
-          key: fuzz-linux-${{ github.run_id }}
+          key: fuzz-${{ inputs.runs-on }}-${{ github.run_id }}
           restore-keys: fuzz-
           enableCrossOsArchive: true
       - run: cargo install cargo-fuzz
@@ -48,52 +48,15 @@ jobs:
             cargo fuzz cmin "$target"
           done
         env:
-          TIMEOUT: ${{ inputs.linux-timeout }}
+          TIMEOUT: ${{ inputs.timeout }}
       - uses: actions/cache/save@v5
         if: always()
         with:
           path: fuzz/corpus
-          key: fuzz-linux-${{ github.run_id }}
+          key: fuzz-${{ inputs.runs-on }}-${{ github.run_id }}
           enableCrossOsArchive: true
       - uses: actions/upload-artifact@v6
         if: failure()
         with:
-          name: fuzz-artifacts-linux
-          path: fuzz/artifacts
-
-  fuzz-macos:
-    needs: fuzz-linux
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@nightly
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: true
-      - uses: actions/cache/restore@v5
-        with:
-          path: fuzz/corpus
-          key: fuzz-macos-${{ github.run_id }}
-          restore-keys: |
-            fuzz-linux-${{ github.run_id }}
-            fuzz-
-          enableCrossOsArchive: true
-      - run: cargo install cargo-fuzz
-      - run: |
-          for target in $(cargo fuzz list 2>/dev/null); do
-            cargo fuzz run "$target" -- -max_total_time="$TIMEOUT"
-            cargo fuzz cmin "$target"
-          done
-        env:
-          TIMEOUT: ${{ inputs.macos-timeout }}
-      - uses: actions/cache/save@v5
-        if: always()
-        with:
-          path: fuzz/corpus
-          key: fuzz-macos-${{ github.run_id }}
-          enableCrossOsArchive: true
-      - uses: actions/upload-artifact@v6
-        if: failure()
-        with:
-          name: fuzz-artifacts-macos
+          name: fuzz-artifacts-${{ inputs.runs-on }}
           path: fuzz/artifacts
