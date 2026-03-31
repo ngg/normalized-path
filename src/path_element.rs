@@ -9,6 +9,26 @@ use crate::normalize::{normalize_ci_from_normalized_cs, normalize_cs};
 use crate::os::os_compatible_from_normalized_cs;
 use crate::utils::SubstringOrOwned;
 
+/// Non-generic core of `with_case_sensitivity`: validates, normalizes, and computes
+/// the OS-compatible form, returning the two `SubstringOrOwned` fields.
+fn build_fields(
+    original: &str,
+    cs: CaseSensitivity,
+) -> Result<(SubstringOrOwned, SubstringOrOwned)> {
+    let with_original = |kind: crate::ErrorKind| kind.into_error(String::from(original));
+
+    let cs_normalized = normalize_cs(original).map_err(&with_original)?;
+    let normalized = match cs {
+        CaseSensitivity::Sensitive => SubstringOrOwned::new(&cs_normalized, original),
+        CaseSensitivity::Insensitive => {
+            SubstringOrOwned::new(&normalize_ci_from_normalized_cs(&cs_normalized), original)
+        }
+    };
+    let os_str = os_compatible_from_normalized_cs(&cs_normalized).map_err(&with_original)?;
+    let os_compatible = SubstringOrOwned::new(&os_str, original);
+    Ok((normalized, os_compatible))
+}
+
 /// Case-sensitive path element (compile-time case sensitivity).
 ///
 /// Alias for `PathElementGeneric<'a, CaseSensitive>`. Implements [`Hash`](core::hash::Hash).
@@ -419,19 +439,8 @@ where
     ) -> Result<Self> {
         let original = original.into();
         let case_sensitivity = case_sensitivity.into();
-
-        let with_original =
-            |kind: crate::ErrorKind| kind.into_error(String::from(original.as_ref()));
-
-        let cs_normalized = normalize_cs(&original).map_err(&with_original)?;
-        let normalized = match CaseSensitivity::from(&case_sensitivity) {
-            CaseSensitivity::Sensitive => SubstringOrOwned::new(&cs_normalized, &original),
-            CaseSensitivity::Insensitive => {
-                SubstringOrOwned::new(&normalize_ci_from_normalized_cs(&cs_normalized), &original)
-            }
-        };
-        let os_str = os_compatible_from_normalized_cs(&cs_normalized).map_err(&with_original)?;
-        let os_compatible = SubstringOrOwned::new(&os_str, &original);
+        let cs = CaseSensitivity::from(&case_sensitivity);
+        let (normalized, os_compatible) = build_fields(&original, cs)?;
         Ok(Self {
             original,
             normalized,
