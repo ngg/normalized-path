@@ -9,6 +9,9 @@ on:
       timeout:
         type: number
         default: 60
+      fork:
+        type: number
+        default: 2
   workflow_dispatch:
     inputs:
       runs-on:
@@ -19,6 +22,10 @@ on:
         description: "Fuzz timeout in seconds"
         type: number
         default: 60
+      fork:
+        description: "Parallel fuzz processes (-fork=N). macOS has 3 CPUs, private linux/win 2, public linux/win 4. See https://docs.github.com/en/actions/reference/runners/github-hosted-runners"
+        type: number
+        default: 2
 
 permissions:
   contents: read
@@ -44,11 +51,12 @@ jobs:
       - run: cargo install cargo-fuzz
       - run: |
           for target in $(cargo fuzz list 2>/dev/null); do
-            cargo fuzz run "$target" -- -max_total_time="$TIMEOUT"
+            cargo fuzz run "$target" -- -max_total_time="$TIMEOUT" -fork="$FORK"
             cargo fuzz cmin "$target"
           done
         env:
           TIMEOUT: ${{ inputs.timeout }}
+          FORK: ${{ inputs.fork }}
       - uses: actions/cache/save@v5
         if: always()
         with:
