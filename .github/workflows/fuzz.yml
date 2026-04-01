@@ -52,7 +52,9 @@ jobs:
       - run: |
           for target in $(cargo fuzz list 2>/dev/null); do
             cargo fuzz run "$target" -- -max_total_time="$TIMEOUT" -fork="$FORK"
-            cargo fuzz cmin "$target"
+            # TODO: figure out why cmin on one platform loses coverage for the other,
+            # even though apple_compatible_from_normalized_cs_fallback should keep parity.
+            # cargo fuzz cmin "$target"
           done
         env:
           TIMEOUT: ${{ inputs.timeout }}
