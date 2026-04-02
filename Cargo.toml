@@ -5,19 +5,17 @@ resolver = "3"
 
 [package]
 name = "normalized-path"
-version = "0.0.1"
+version = "0.0.2"
 description = "Opinionated cross-platform, optionally case-insensitive path normalization"
 repository = "https://github.com/ngg/normalized-path"
 documentation = "https://docs.rs/normalized-path"
-publish = false
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [package.metadata.docs.rs]
-all-features = true
-targets = ["x86_64-unknown-linux-gnu"]
+features = ["std"]
 
 [badges]
 maintenance = { status = "experimental" }
