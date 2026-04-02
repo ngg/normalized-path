@@ -40,6 +40,7 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+      - run: cargo update --ignore-rust-version
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   fmt:
@@ -50,6 +51,7 @@ jobs:
         with:
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
+      - run: cargo update --ignore-rust-version
       - run: cargo fmt --all --check
 
   docs:
@@ -61,6 +63,7 @@ jobs:
         with:
           cache-all-crates: true
       - run: cargo install cargo-docs-rs
+      - run: cargo update --ignore-rust-version
       - run: cargo docs-rs
 
   msrv:
@@ -71,6 +74,7 @@ jobs:
         with:
           toolchain: "1.85"
       - uses: Swatinem/rust-cache@v2
+      - run: cargo update
       - run: cargo build
       - run: cargo build --no-default-features
       - run: cargo test
@@ -87,13 +91,13 @@ jobs:
         with:
           cache-all-crates: true
       - run: cargo update --ignore-rust-version
-      - run: cargo build --target wasm32-unknown-unknown
       - run: |
           VERSION=$(cargo pkgid wasm-bindgen | cut -d"@" -f2)
           INSTALLED=$(wasm-bindgen --version 2>/dev/null | cut -d" " -f2 || echo "")
           if [ "$VERSION" != "$INSTALLED" ]; then
             cargo install -f wasm-bindgen-cli --version "$VERSION"
           fi
+      - run: cargo build --target wasm32-unknown-unknown
       - run: cargo test --target wasm32-unknown-unknown
 
   wasm32-wasip1:
