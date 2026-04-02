@@ -107,8 +107,9 @@
 //! 9. **Turkish I/i mapping** -- maps U+0130 (İ) and U+0131 (ı) to ASCII I and i
 //!    respectively, and strips U+0307 COMBINING DOT ABOVE after I/i (with intervening
 //!    non-starter combiners allowed).  Unicode `toCasefold()` is locale-independent
-//!    and treats ı as distinct from i, yet locale-aware uppercasing/lowercasing can
-//!    map them to ASCII I/i, creating collisions that `toCasefold()` alone misses.
+//!    and treats ı as distinct from i (ı folds to itself), yet `toUppercase(ı)` = I
+//!    even without locale tailoring, and I folds back to i -- creating a collision
+//!    that `toCasefold()` alone misses.
 //!    This post-folding fixup neutralizes those inconsistencies.
 //!
 //! 10. **NFC composition** (final) -- recompose after case folding to produce the
