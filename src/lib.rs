@@ -1,8 +1,9 @@
 //! Opinionated cross-platform, optionally case-insensitive path normalization.
 //!
-//! This crate provides [`PathElementGeneric`], a type that takes a raw path element name,
-//! validates it, normalizes it to a canonical form, and computes an OS-compatible
-//! presentation form.
+//! This crate provides [`PathElementCS`] (case-sensitive), [`PathElementCI`]
+//! (case-insensitive), and [`PathElement`] (runtime-selected) -- types that take a
+//! raw path element name, validate it, normalize it to a canonical form, and compute
+//! an OS-compatible presentation form.
 //!
 //! # Design goals and non-goals
 //!
@@ -158,13 +159,36 @@
 //!
 //! ```
 //! # use normalized_path::{PathElementCS, PathElementCI};
-//! // Case-sensitive: whitespace trimmed, fullwidth mapped to ASCII, NFC composed
-//! let pe = PathElementCS::new("  \u{FF21}bc.txt  ")?;
-//! assert_eq!(pe.normalized(), "Abc.txt");
+//! // NFD input (e + combining acute) composes to NFC (é), whitespace is trimmed
+//! let pe = PathElementCS::new("  cafe\u{0301}.txt  ")?;
+//! assert_eq!(pe.original(), "  cafe\u{0301}.txt  ");
+//! assert_eq!(pe.normalized(), "caf\u{00E9}.txt");
 //!
-//! // Case-insensitive: additionally case-folded
-//! let pe = PathElementCI::new("Hello.TXT")?;
-//! assert_eq!(pe.normalized(), "hello.txt");
+//! // Case-insensitive: German ß case-folds to "ss"
+//! let pe = PathElementCI::new("Stra\u{00DF}e.txt")?;
+//! assert_eq!(pe.original(), "Stra\u{00DF}e.txt");
+//! assert_eq!(pe.normalized(), "strasse.txt");
+//! # Ok::<(), normalized_path::Error>(())
+//! ```
+//!
+//! The OS-compatible form adapts names for the host filesystem.  On Windows,
+//! forbidden characters and reserved device names are mapped to safe alternatives;
+//! on Apple, names are converted to a form close to NFD:
+//!
+//! ```
+//! # use normalized_path::PathElementCS;
+//! // A name with a Windows-forbidden character and an accented letter
+//! let pe = PathElementCS::new("caf\u{00E9} 10:30")?;
+//! assert_eq!(pe.normalized(), "caf\u{00E9} 10:30");
+//!
+//! #[cfg(target_os = "windows")]
+//! assert_eq!(pe.os_compatible(), "caf\u{00E9} 10\u{FF1A}30"); // : → fullwidth ：
+//!
+//! #[cfg(target_vendor = "apple")]
+//! assert_eq!(pe.os_compatible(), "cafe\u{0301} 10:30"); // NFC → NFD
+//!
+//! #[cfg(not(any(target_os = "windows", target_vendor = "apple")))]
+//! assert_eq!(pe.os_compatible(), pe.normalized()); // unchanged
 //! # Ok::<(), normalized_path::Error>(())
 //! ```
 //!
@@ -172,8 +196,9 @@
 //!
 //! ```
 //! # use normalized_path::PathElementCS;
-//! let a = PathElementCS::new("  hello.txt  ")?;
-//! let b = PathElementCS::new("hello.txt")?;
+//! // NFD (e + combining acute) and NFC (é) normalize to the same form
+//! let a = PathElementCS::new("cafe\u{0301}.txt")?;
+//! let b = PathElementCS::new("caf\u{00E9}.txt")?;
 //! assert_eq!(a, b);
 //! assert_ne!(a.original(), b.original());
 //! # Ok::<(), normalized_path::Error>(())
@@ -185,7 +210,8 @@
 //! ```
 //! # use std::collections::{BTreeSet, HashSet};
 //! # use normalized_path::PathElementCI;
-//! let names = ["README.md", "readme.md", "Readme.MD"];
+//! // Turkish İ, dotless ı, ASCII I, and ASCII i all normalize to the same CI form
+//! let names = ["\u{0130}.txt", "\u{0131}.txt", "I.txt", "i.txt"];
 //! let set: HashSet<_> = names.iter().map(|n| PathElementCI::new(*n).unwrap()).collect();
 //! assert_eq!(set.len(), 1);
 //!

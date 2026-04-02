@@ -9,27 +9,45 @@ use crate::normalize::{normalize_ci_from_normalized_cs, normalize_cs};
 use crate::os::os_compatible_from_normalized_cs;
 use crate::utils::SubstringOrOwned;
 
-/// Case-sensitive path element (compile-time case sensitivity).
+/// A validated, normalized, **case-sensitive** single path element.
 ///
-/// Alias for `PathElementGeneric<'a, CaseSensitive>`. Implements [`Hash`](core::hash::Hash).
+/// Takes a raw path element name, validates it (rejecting empty strings, `.`, `..`,
+/// and strings containing `/` or `\0`), normalizes it, and computes an OS-compatible
+/// presentation form.
+///
+/// Equality, ordering, and hashing are based on the **normalized** form.
+/// Case is preserved -- `"Hello.txt"` and `"hello.txt"` are distinct.
+/// Implements [`Hash`](core::hash::Hash).
 pub type PathElementCS<'a> = PathElementGeneric<'a, CaseSensitive>;
 
-/// Case-insensitive path element (compile-time case sensitivity).
+/// A validated, normalized, **case-insensitive** single path element.
 ///
-/// Alias for `PathElementGeneric<'a, CaseInsensitive>`. Implements [`Hash`](core::hash::Hash).
+/// Takes a raw path element name, validates it (rejecting empty strings, `.`, `..`,
+/// and strings containing `/` or `\0`), normalizes it case-insensitively, and computes
+/// an OS-compatible presentation form.
+///
+/// Equality, ordering, and hashing are based on the **normalized** (case-folded) form.
+/// `"Hello.txt"` and `"hello.txt"` are equal.
+/// Implements [`Hash`](core::hash::Hash).
 pub type PathElementCI<'a> = PathElementGeneric<'a, CaseInsensitive>;
 
-/// Path element with runtime-selected case sensitivity.
+/// A validated, normalized single path element with **runtime-selected** case sensitivity.
 ///
-/// Alias for `PathElementGeneric<'a, CaseSensitivity>`. Does **not** implement
-/// [`Hash`](core::hash::Hash) because elements with different sensitivities must not
-/// share a hash map.
+/// Takes a raw path element name, validates it (rejecting empty strings, `.`, `..`,
+/// and strings containing `/` or `\0`), normalizes it, and computes an OS-compatible
+/// presentation form.
+/// Case sensitivity is chosen at construction time via the [`CaseSensitivity`] enum.
+///
+/// Does **not** implement [`Hash`](core::hash::Hash) because elements with different
+/// sensitivities must not share a hash map. Comparing or ordering elements with
+/// different sensitivities will panic. Use [`PathElementCS`] or [`PathElementCI`]
+/// when the sensitivity is known at compile time.
 pub type PathElement<'a> = PathElementGeneric<'a, CaseSensitivity>;
 
 /// A validated, normalized single path element.
 ///
 /// `PathElementGeneric` takes a raw path element name, validates it (rejecting empty
-/// strings, `.`, `..`, and `/`), normalizes it through a Unicode normalization pipeline,
+/// strings, `.`, `..`, and strings containing `/` or `\0`), normalizes it through a Unicode normalization pipeline,
 /// and computes an OS-compatible presentation form. All three views -- original,
 /// normalized, and OS-compatible -- are accessible without re-computation.
 ///
@@ -40,7 +58,8 @@ pub type PathElement<'a> = PathElementGeneric<'a, CaseSensitivity>;
 ///
 /// Equality, ordering, and hashing are based on the **normalized** form, so two
 /// `PathElementGeneric` values with different originals but the same normalized form
-/// are considered equal.
+/// are considered equal. Comparing or ordering elements with different case
+/// sensitivities will panic.
 ///
 /// Where possible, the normalized and OS-compatible forms borrow from the original
 /// string to avoid allocation.
@@ -68,7 +87,6 @@ impl<S: core::fmt::Debug> core::fmt::Debug for PathElementGeneric<'_, S> {
 /// Compares by `normalized()`.
 ///
 /// # Panics
-///
 /// Panics if `self` and `other` have different [`CaseSensitivity`] values.
 /// Use [`PartialOrd`] for a non-panicking comparison that returns `None` on mismatch.
 impl<'a, S1, S2> PartialEq<PathElementGeneric<'a, S2>> for PathElementGeneric<'_, S1>
@@ -107,7 +125,6 @@ where
 /// Compares by `normalized()`.
 ///
 /// # Panics
-///
 /// Panics if `self` and `other` have different [`CaseSensitivity`] values.
 /// This can only happen with the runtime-dynamic [`PathElement`] type alias.
 /// The typed aliases [`PathElementCS`] and [`PathElementCI`] always have
@@ -146,7 +163,6 @@ impl<'a> PathElementCS<'a> {
     /// Creates a new case-sensitive path element from a string.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
     /// or contains `/`).
     ///
@@ -166,9 +182,19 @@ impl<'a> PathElementCS<'a> {
     /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
     /// or contains `/`).
+    ///
+    /// ```
+    /// # use normalized_path::PathElementCS;
+    /// let pe = PathElementCS::from_bytes(b"hello.txt")?;
+    /// assert_eq!(pe.normalized(), "hello.txt");
+    ///
+    /// // Invalid UTF-8 is replaced with U+FFFD
+    /// let pe = PathElementCS::from_bytes(b"hello\xff.txt")?;
+    /// assert_eq!(pe.normalized(), "hello\u{FFFD}.txt");
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     pub fn from_bytes(original: impl Into<Cow<'a, [u8]>>) -> Result<Self> {
         Self::from_bytes_with_case_sensitivity(original, CaseSensitive)
     }
@@ -179,9 +205,16 @@ impl<'a> PathElementCS<'a> {
     /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
     /// or contains `/`).
+    ///
+    /// ```
+    /// # use normalized_path::PathElementCS;
+    /// # use std::ffi::OsStr;
+    /// let pe = PathElementCS::from_os_str(OsStr::new("hello.txt"))?;
+    /// assert_eq!(pe.normalized(), "hello.txt");
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     #[cfg(feature = "std")]
     pub fn from_os_str(original: impl Into<Cow<'a, OsStr>>) -> Result<Self> {
         Self::from_os_str_with_case_sensitivity(original, CaseSensitive)
@@ -192,7 +225,6 @@ impl<'a> PathElementCI<'a> {
     /// Creates a new case-insensitive path element from a string.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
     /// or contains `/`).
     ///
@@ -212,9 +244,15 @@ impl<'a> PathElementCI<'a> {
     /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
     /// or contains `/`).
+    ///
+    /// ```
+    /// # use normalized_path::PathElementCI;
+    /// let pe = PathElementCI::from_bytes(b"Hello.TXT")?;
+    /// assert_eq!(pe.normalized(), "hello.txt");
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     pub fn from_bytes(original: impl Into<Cow<'a, [u8]>>) -> Result<Self> {
         Self::from_bytes_with_case_sensitivity(original, CaseInsensitive)
     }
@@ -225,7 +263,6 @@ impl<'a> PathElementCI<'a> {
     /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
     /// or contains `/`).
     #[cfg(feature = "std")]
@@ -238,8 +275,17 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
     /// Creates a new path element with runtime-selected case sensitivity.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid.
+    ///
+    /// ```
+    /// # use normalized_path::{PathElement, CaseSensitivity};
+    /// let cs = PathElement::new("Hello.txt", CaseSensitivity::Sensitive)?;
+    /// assert_eq!(cs.normalized(), "Hello.txt");
+    ///
+    /// let ci = PathElement::new("Hello.txt", CaseSensitivity::Insensitive)?;
+    /// assert_eq!(ci.normalized(), "hello.txt");
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     pub fn new(
         original: impl Into<Cow<'a, str>>,
         case_sensitivity: impl Into<CaseSensitivity>,
@@ -253,7 +299,6 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
     /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
     /// or contains `/`).
     pub fn from_bytes(
@@ -269,7 +314,6 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
     /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
     /// or contains `/`).
     #[cfg(feature = "std")]
@@ -283,7 +327,6 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
     /// Convenience constructor for a case-sensitive `PathElement`.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid.
     pub fn new_cs(original: impl Into<Cow<'a, str>>) -> Result<Self> {
         Self::with_case_sensitivity(original, CaseSensitive)
@@ -292,7 +335,6 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
     /// Convenience constructor for a case-insensitive `PathElement`.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid.
     pub fn new_ci(original: impl Into<Cow<'a, str>>) -> Result<Self> {
         Self::with_case_sensitivity(original, CaseInsensitive)
@@ -304,7 +346,6 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
     /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid.
     pub fn from_bytes_cs(original: impl Into<Cow<'a, [u8]>>) -> Result<Self> {
         Self::from_bytes_with_case_sensitivity(original, CaseSensitive)
@@ -316,7 +357,6 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
     /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid.
     pub fn from_bytes_ci(original: impl Into<Cow<'a, [u8]>>) -> Result<Self> {
         Self::from_bytes_with_case_sensitivity(original, CaseInsensitive)
@@ -328,7 +368,6 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
     /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid.
     #[cfg(feature = "std")]
     pub fn from_os_str_cs(original: impl Into<Cow<'a, OsStr>>) -> Result<Self> {
@@ -341,7 +380,6 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
     /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid.
     #[cfg(feature = "std")]
     pub fn from_os_str_ci(original: impl Into<Cow<'a, OsStr>>) -> Result<Self> {
@@ -364,7 +402,6 @@ where
     /// runtime-dynamic constructors delegate to this method.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
     /// or contains `/`).
     pub fn from_bytes_with_case_sensitivity(
@@ -390,7 +427,6 @@ where
     /// [Normalization pipeline](crate#normalization-pipeline) step 0.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
     /// or contains `/`).
     #[cfg(feature = "std")]
@@ -412,7 +448,6 @@ where
     /// constructors delegate to this method.
     ///
     /// # Errors
-    ///
     /// Returns [`Error`](crate::Error) if the name is invalid (empty after
     /// normalization, `.`, `..`, or contains `/`).
     pub fn with_case_sensitivity(
@@ -447,6 +482,13 @@ where
     }
 
     /// Returns the case sensitivity of this path element as a [`CaseSensitivity`] enum.
+    ///
+    /// ```
+    /// # use normalized_path::{PathElementCS, PathElementCI, CaseSensitivity};
+    /// assert_eq!(PathElementCS::new("a")?.case_sensitivity(), CaseSensitivity::Sensitive);
+    /// assert_eq!(PathElementCI::new("a")?.case_sensitivity(), CaseSensitivity::Insensitive);
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     pub fn case_sensitivity(&self) -> CaseSensitivity {
         CaseSensitivity::from(&self.case_sensitivity)
     }
@@ -467,6 +509,13 @@ impl<'a, S> PathElementGeneric<'a, S> {
     }
 
     /// Consumes `self` and returns the original input string.
+    ///
+    /// ```
+    /// # use normalized_path::PathElementCS;
+    /// let pe = PathElementCS::new("  hello.txt  ")?;
+    /// assert_eq!(pe.into_original(), "  hello.txt  ");
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     pub fn into_original(self) -> Cow<'a, str> {
         self.original
     }
@@ -490,6 +539,16 @@ impl<'a, S> PathElementGeneric<'a, S> {
     /// This is the canonical representation used for equality comparisons, ordering,
     /// and hashing. In case-sensitive mode it is NFC-normalized; in case-insensitive
     /// mode it is additionally case-folded.
+    ///
+    /// ```
+    /// # use normalized_path::{PathElementCS, PathElementCI};
+    /// let cs = PathElementCS::new("Caf\u{00E9}.txt")?;
+    /// assert_eq!(cs.normalized(), "Caf\u{00E9}.txt"); // case preserved
+    ///
+    /// let ci = PathElementCI::new("Caf\u{00E9}.txt")?;
+    /// assert_eq!(ci.normalized(), "caf\u{00E9}.txt"); // case-folded
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     pub fn normalized(&self) -> &str {
         self.normalized.as_ref(&self.original)
     }
@@ -498,11 +557,26 @@ impl<'a, S> PathElementGeneric<'a, S> {
     ///
     /// Returns `Cow::Borrowed` when the normalized form is a substring of the original
     /// and the original was itself borrowed.
+    ///
+    /// ```
+    /// # use std::borrow::Cow;
+    /// # use normalized_path::PathElementCS;
+    /// let pe = PathElementCS::new("hello.txt")?;
+    /// assert!(matches!(pe.into_normalized(), Cow::Borrowed("hello.txt")));
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     pub fn into_normalized(self) -> Cow<'a, str> {
         self.normalized.into_cow(self.original)
     }
 
     /// Returns `true` if the OS-compatible form is identical to the original.
+    ///
+    /// ```
+    /// # use normalized_path::PathElementCS;
+    /// assert!(PathElementCS::new("hello.txt")?.is_os_compatible());
+    /// assert!(!PathElementCS::new("  hello.txt  ")?.is_os_compatible());
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     pub fn is_os_compatible(&self) -> bool {
         self.os_compatible.is_identity(&self.original)
     }
@@ -520,17 +594,42 @@ impl<'a, S> PathElementGeneric<'a, S> {
     }
 
     /// Consumes `self` and returns the OS-compatible form as a [`Cow<str>`](Cow).
+    ///
+    /// ```
+    /// # use std::borrow::Cow;
+    /// # use normalized_path::PathElementCS;
+    /// let pe = PathElementCS::new("hello.txt")?;
+    /// assert!(matches!(pe.into_os_compatible(), Cow::Borrowed("hello.txt")));
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     pub fn into_os_compatible(self) -> Cow<'a, str> {
         self.os_compatible.into_cow(self.original)
     }
 
     /// Returns the OS-compatible form as an [`OsStr`] reference.
+    ///
+    /// ```
+    /// # use normalized_path::PathElementCS;
+    /// # use std::ffi::OsStr;
+    /// let pe = PathElementCS::new("hello.txt")?;
+    /// assert_eq!(pe.os_str(), OsStr::new("hello.txt"));
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     #[cfg(feature = "std")]
     pub fn os_str(&self) -> &OsStr {
         OsStr::new(self.os_compatible())
     }
 
     /// Consumes `self` and returns the OS-compatible form as a [`Cow<OsStr>`](Cow).
+    ///
+    /// ```
+    /// # use std::borrow::Cow;
+    /// # use std::ffi::OsStr;
+    /// # use normalized_path::PathElementCS;
+    /// let pe = PathElementCS::new("hello.txt")?;
+    /// assert!(matches!(pe.into_os_str(), Cow::Borrowed(s) if s == OsStr::new("hello.txt")));
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     #[cfg(feature = "std")]
     pub fn into_os_str(self) -> Cow<'a, OsStr> {
         match self.into_os_compatible() {
@@ -556,12 +655,32 @@ impl<'a, S> PathElementGeneric<'a, S> {
     }
 
     /// Returns `true` if the original string is owned (not borrowed).
+    ///
+    /// ```
+    /// # use std::borrow::Cow;
+    /// # use normalized_path::PathElementCS;
+    /// let owned = PathElementCS::new(Cow::<str>::Owned("hello".into()))?;
+    /// assert!(owned.is_owned());
+    ///
+    /// let borrowed = PathElementCS::new("hello")?;
+    /// assert!(!borrowed.is_owned());
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     pub fn is_owned(&self) -> bool {
         matches!(self.original, Cow::Owned(_))
     }
 
     /// Consumes `self` and returns an equivalent `PathElementGeneric` with a `'static`
     /// lifetime by cloning the original string if it was borrowed.
+    ///
+    /// ```
+    /// # use normalized_path::PathElementCS;
+    /// let pe = PathElementCS::new("hello.txt")?;
+    /// let owned: PathElementCS<'static> = pe.into_owned();
+    /// assert!(owned.is_owned());
+    /// assert_eq!(owned.normalized(), "hello.txt");
+    /// # Ok::<(), normalized_path::Error>(())
+    /// ```
     pub fn into_owned(self) -> PathElementGeneric<'static, S> {
         PathElementGeneric {
             original: Cow::Owned(self.original.into_owned()),

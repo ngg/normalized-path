@@ -93,7 +93,6 @@ pub fn map_control_chars(s: &str) -> Cow<'_, str> {
 /// control char mapping → validation → NFC.
 ///
 /// # Errors
-///
 /// Returns an error if the name is invalid.
 pub fn normalize_cs(name: &str) -> ResultKind<Cow<'_, str>> {
     let s = nfd(name);
@@ -125,7 +124,6 @@ pub fn normalize_ci_from_normalized_cs(cs_normalized: &str) -> Cow<'_, str> {
 /// Rejects empty strings, `.`, `..`, names containing `/`, and names containing `\0`.
 ///
 /// # Errors
-///
 /// Returns an error if the name is invalid.
 pub fn validate_path_element(name: &str) -> ResultKind<()> {
     match name {

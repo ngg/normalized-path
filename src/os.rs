@@ -79,8 +79,10 @@ pub fn is_reserved_on_windows(name: &str) -> bool {
 }
 
 /// Windows compatibility mapping: forbidden characters, trailing dots, and reserved names.
+///
+/// # Panics
+/// Should never panic.
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
-#[allow(clippy::missing_panics_doc)]
 pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, str> {
     // Step 1: Map forbidden characters
     let mut result = cow(s.chars().map(map_windows_forbidden), s);
@@ -111,6 +113,17 @@ pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, str> {
     result
 }
 
+/// Apple compatibility mapping: portable fallback.
+///
+/// NFD normalization + leading BOM removal, without calling into Apple frameworks.
+/// Always available in test/`__test` builds; used by the real
+/// `apple_compatible_from_normalized_cs` on Apple targets as well.
+#[cfg(any(test, feature = "__test"))]
+#[must_use]
+pub fn apple_compatible_from_normalized_cs_fallback(s: &str) -> Cow<'_, str> {
+    cow(nfd(s).trim_start_matches('\u{FEFF}').chars(), s)
+}
+
 /// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
 /// Uses `CFStringGetFileSystemRepresentation` to obtain the Darwin-native byte sequence.
 ///
@@ -139,22 +152,10 @@ pub fn apple_compatible_from_normalized_cs(s: &str) -> ResultKind<Cow<'_, str>> 
     }
 }
 
-/// Apple compatibility mapping: portable fallback.
-///
-/// NFD normalization + leading BOM removal, without calling into Apple frameworks.
-/// Always available in test/`__test` builds; used by the real
-/// `apple_compatible_from_normalized_cs` on Apple targets as well.
-#[cfg(any(test, feature = "__test"))]
-#[must_use]
-pub fn apple_compatible_from_normalized_cs_fallback(s: &str) -> Cow<'_, str> {
-    cow(nfd(s).trim_start_matches('\u{FEFF}').chars(), s)
-}
-
 /// Apple compatibility mapping: NFC to NFD conversion and BOM removal.
 /// Portable fallback using NFD normalization + leading BOM removal.
 ///
 /// # Errors
-///
 /// This fallback is infallible but returns `ResultKind` for API compatibility.
 #[cfg(all(not(target_vendor = "apple"), any(test, feature = "__test")))]
 #[allow(clippy::unnecessary_wraps)]
