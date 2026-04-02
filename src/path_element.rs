@@ -422,16 +422,21 @@ where
         let original = original.into();
         let case_sensitivity = case_sensitivity.into();
         let cs = CaseSensitivity::from(&case_sensitivity);
-        let with_original = |kind: crate::ErrorKind| kind.into_error(String::from(&*original));
 
-        let cs_normalized = normalize_cs(&original).map_err(&with_original)?;
+        let cs_normalized = match normalize_cs(&original) {
+            Ok(v) => v,
+            Err(kind) => return Err(kind.into_error(original)),
+        };
         let normalized = match cs {
             CaseSensitivity::Sensitive => SubstringOrOwned::new(&cs_normalized, &original),
             CaseSensitivity::Insensitive => {
                 SubstringOrOwned::new(&normalize_ci_from_normalized_cs(&cs_normalized), &original)
             }
         };
-        let os_str = os_compatible_from_normalized_cs(&cs_normalized).map_err(&with_original)?;
+        let os_str = match os_compatible_from_normalized_cs(&cs_normalized) {
+            Ok(v) => v,
+            Err(kind) => return Err(kind.into_error(original)),
+        };
         let os_compatible = SubstringOrOwned::new(&os_str, &original);
         Ok(Self {
             original,

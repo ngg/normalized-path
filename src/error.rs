@@ -29,9 +29,9 @@ pub enum ErrorKind {
 
 impl ErrorKind {
     /// Converts this error kind into an [`Error`], attaching the original input string.
-    pub(crate) fn into_error(self, original: String) -> Error {
+    pub(crate) fn into_error(self, original: impl Into<String>) -> Error {
         Error {
-            original,
+            original: original.into(),
             kind: self,
         }
     }
