@@ -50,6 +50,7 @@ jobs:
           restore-keys: fuzz-
           enableCrossOsArchive: true
       - run: cargo install cargo-fuzz
+      - run: cargo update --ignore-rust-version
       - run: |
           # Ensure MSVC link.exe is found before Git's /usr/bin/link.exe
           [ -n "$VCToolsInstallDir" ] && export PATH="$(cygpath -u "$VCToolsInstallDir/bin/Hostx64/x64"):$PATH"

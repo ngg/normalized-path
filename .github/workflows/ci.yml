@@ -26,10 +26,6 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build
-      - run: cargo build --no-default-features
-      - run: cargo test
-      - run: cargo test --no-default-features
       - run: cargo update --ignore-rust-version
       - run: cargo build
       - run: cargo build --no-default-features
@@ -90,6 +86,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: true
+      - run: cargo update --ignore-rust-version
       - run: cargo build --target wasm32-unknown-unknown
       - run: |
           VERSION=$(cargo pkgid wasm-bindgen | cut -d"@" -f2)
@@ -109,8 +106,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: true
-      - run: cargo build --target wasm32-wasip1
       - run: cargo install wasmtime-cli
+      - run: cargo update --ignore-rust-version
+      - run: cargo build --target wasm32-wasip1
       - run: cargo test --target wasm32-wasip1
 
   fuzz-linux:
