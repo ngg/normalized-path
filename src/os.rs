@@ -1,6 +1,4 @@
 use alloc::borrow::Cow;
-#[cfg(any(target_os = "windows", test, feature = "__test"))]
-use alloc::format;
 
 #[cfg(target_vendor = "apple")]
 use crate::ErrorKind;
@@ -96,14 +94,18 @@ pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, str> {
 
     // Step 3: Handle reserved names
     if is_reserved_on_windows(&result) {
-        let owned = result.into_owned();
-        let first = owned.chars().next().expect("reserved name is non-empty");
+        let mut owned = result.into_owned();
+        let first = owned.as_bytes()[0];
         debug_assert!(
             first.is_ascii_alphabetic(),
-            "reserved name starts with non-ASCII-letter: {first:?}"
+            "reserved name starts with non-ASCII-letter: {:?}",
+            first as char,
         );
-        let fullwidth = char::from_u32(first as u32 + 0xFEE0).unwrap_or(first);
-        result = Cow::Owned(format!("{fullwidth}{}", &owned[first.len_utf8()..]));
+        let fullwidth = char::from_u32(u32::from(first) + 0xFEE0)
+            .expect("reserved name starts with non-ASCII-alphabetic byte");
+        let mut buf = [0u8; 3];
+        owned.replace_range(..1, fullwidth.encode_utf8(&mut buf));
+        result = Cow::Owned(owned);
     }
 
     result
