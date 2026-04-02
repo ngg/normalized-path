@@ -9,8 +9,8 @@ license = "MIT OR Apache-2.0"
 cargo-fuzz = true
 
 [dependencies]
-icu_casemap = { version = "~2.1.0", default-features = false, features = ["compiled_data"] }
-icu_locale_core = "~2.1.0"
+icu_casemap = { workspace = true }
+icu_locale_core = { workspace = true }
 libfuzzer-sys = "0.4.0"
 
 normalized-path = { path = "..", features = ["__test"] }

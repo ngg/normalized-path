@@ -3,6 +3,13 @@ members = [".", "fuzz"]
 exclude = ["fuzz"]
 resolver = "3"
 
+[workspace.dependencies]
+# Pinned to 2.1.x–2.2.x for Unicode 17.0.0
+icu_casemap = { version = ">=2.1.0, <2.3.0", default-features = false, features = ["compiled_data"] }
+icu_locale_core = { version = ">=2.1.0, <2.3.0", default-features = false }
+icu_normalizer = { version = ">=2.1.0, <2.3.0", default-features = false, features = ["compiled_data"] }
+icu_properties = { version = ">=2.1.0, <2.3.0", default-features = false, features = ["compiled_data"] }
+
 [package]
 name = "normalized-path"
 version = "0.0.2"
@@ -26,10 +33,9 @@ std = []
 __test = []
 
 [dependencies]
-# Pinned to 2.1.x for Unicode 17.0.0
-icu_casemap = { version = "~2.1.0", default-features = false, features = ["compiled_data"] }
-icu_normalizer = { version = "~2.1.0", default-features = false, features = ["compiled_data"] }
-icu_properties = { version = "~2.1.0", default-features = false, features = ["compiled_data"] }
+icu_casemap = { workspace = true }
+icu_normalizer = { workspace = true }
+icu_properties = { workspace = true }
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 objc2-core-foundation = { version = "0.3.0", default-features = false, features = ["CFString"] }
