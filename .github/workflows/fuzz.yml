@@ -51,6 +51,8 @@ jobs:
           enableCrossOsArchive: true
       - run: cargo install cargo-fuzz
       - run: |
+          # Ensure MSVC link.exe is found before Git's /usr/bin/link.exe
+          [ -n "$VCToolsInstallDir" ] && export PATH="$VCToolsInstallDir/bin/Hostx64/x64:$PATH"
           for target in $(cargo fuzz list 2>/dev/null); do
             cargo fuzz run "$target" -- -max_total_time="$TIMEOUT" -fork="$FORK"
             # TODO: figure out why cmin on one platform loses coverage for the other,
