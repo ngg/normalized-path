@@ -11,7 +11,7 @@ on:
         default: 60
       fork:
         type: number
-        default: 2
+        default: 4
   workflow_dispatch:
     inputs:
       runs-on:
@@ -23,9 +23,9 @@ on:
         type: number
         default: 60
       fork:
-        description: "Parallel fuzz processes (-fork=N). macOS has 3 CPUs, private linux/win 2, public linux/win 4. See https://docs.github.com/en/actions/reference/runners/github-hosted-runners"
+        description: "Parallel fuzz processes (-fork=N). macOS has 3 CPUs, linux/win 4. See https://docs.github.com/en/actions/reference/runners/github-hosted-runners"
         type: number
-        default: 2
+        default: 4
 
 permissions:
   contents: read
