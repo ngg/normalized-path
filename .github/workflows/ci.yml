@@ -102,8 +102,14 @@ jobs:
     with:
       runs-on: ubuntu-latest
 
-  fuzz-macos:
+  fuzz-windows:
     needs: fuzz-linux
+    uses: ./.github/workflows/fuzz.yml
+    with:
+      runs-on: windows-latest
+
+  fuzz-macos:
+    needs: fuzz-windows
     uses: ./.github/workflows/fuzz.yml
     with:
       runs-on: macos-latest
