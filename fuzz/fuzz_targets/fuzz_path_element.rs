@@ -102,11 +102,17 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
         pe.os_compatible()
     );
 
-    // is_reserved_on_windows must be stable under NFD and NFD→casefold→NFD.
+    // is_reserved_on_windows must be stable under NFD, case_fold, and NFD→casefold→NFD.
     assert_eq!(
         is_reserved_on_windows(normalized),
         is_reserved_on_windows(&nfd(normalized)),
         "is_reserved_on_windows mismatch after nfd\n\
+         normalized: {normalized:?}"
+    );
+    assert_eq!(
+        is_reserved_on_windows(normalized),
+        is_reserved_on_windows(&case_fold(normalized)),
+        "is_reserved_on_windows mismatch after case_fold\n\
          normalized: {normalized:?}"
     );
     assert_eq!(

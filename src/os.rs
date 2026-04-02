@@ -3,8 +3,6 @@ use alloc::borrow::Cow;
 #[cfg(target_vendor = "apple")]
 use crate::ErrorKind;
 use crate::error::ResultKind;
-#[cfg(any(target_os = "windows", test, feature = "__test"))]
-use crate::unicode::case_fold;
 #[cfg(any(test, feature = "__test"))]
 use crate::unicode::nfd;
 #[cfg(any(
@@ -74,8 +72,8 @@ fn map_windows_forbidden(c: char) -> char {
 #[must_use]
 pub fn is_reserved_on_windows(name: &str) -> bool {
     let stem = name.split('.').next().unwrap_or(name);
-    let folded = case_fold(stem);
-    WINDOWS_RESERVED.iter().any(|r| **r == *folded)
+    let lowered = stem.to_ascii_lowercase();
+    WINDOWS_RESERVED.iter().any(|r| **r == *lowered)
 }
 
 /// Windows compatibility mapping: forbidden characters, trailing dots, and reserved names.
