@@ -577,7 +577,7 @@ impl<'a, S> PathElementGeneric<'a, S> {
 /// Converts a compile-time case-sensitive element into a runtime-dynamic [`PathElement`].
 impl<'a> From<PathElementCS<'a>> for PathElement<'a> {
     fn from(pe: PathElementCS<'a>) -> Self {
-        PathElementGeneric {
+        Self {
             original: pe.original,
             normalized: pe.normalized,
             os_compatible: pe.os_compatible,
@@ -589,7 +589,7 @@ impl<'a> From<PathElementCS<'a>> for PathElement<'a> {
 /// Converts a compile-time case-insensitive element into a runtime-dynamic [`PathElement`].
 impl<'a> From<PathElementCI<'a>> for PathElement<'a> {
     fn from(pe: PathElementCI<'a>) -> Self {
-        PathElementGeneric {
+        Self {
             original: pe.original,
             normalized: pe.normalized,
             os_compatible: pe.os_compatible,
@@ -607,14 +607,14 @@ impl<'a> TryFrom<PathElement<'a>> for PathElementCS<'a> {
 
     fn try_from(pe: PathElement<'a>) -> core::result::Result<Self, Self::Error> {
         if pe.case_sensitivity == CaseSensitivity::Sensitive {
-            Ok(PathElementGeneric {
+            Ok(Self {
                 original: pe.original,
                 normalized: pe.normalized,
                 os_compatible: pe.os_compatible,
                 case_sensitivity: CaseSensitive,
             })
         } else {
-            Err(PathElementGeneric {
+            Err(Self::Error {
                 original: pe.original,
                 normalized: pe.normalized,
                 os_compatible: pe.os_compatible,
@@ -633,14 +633,14 @@ impl<'a> TryFrom<PathElement<'a>> for PathElementCI<'a> {
 
     fn try_from(pe: PathElement<'a>) -> core::result::Result<Self, Self::Error> {
         if pe.case_sensitivity == CaseSensitivity::Insensitive {
-            Ok(PathElementGeneric {
+            Ok(Self {
                 original: pe.original,
                 normalized: pe.normalized,
                 os_compatible: pe.os_compatible,
                 case_sensitivity: CaseInsensitive,
             })
         } else {
-            Err(PathElementGeneric {
+            Err(Self::Error {
                 original: pe.original,
                 normalized: pe.normalized,
                 os_compatible: pe.os_compatible,
