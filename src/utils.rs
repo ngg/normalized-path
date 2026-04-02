@@ -89,15 +89,14 @@ impl SubstringOrOwned {
     pub fn into_cow(self, original: Cow<'_, str>) -> Cow<'_, str> {
         match self {
             Self::Owned(s) => Cow::Owned(s),
-            Self::Substring(ofs, len) => {
-                if ofs == 0 && len == original.len() {
-                    original
-                } else if let Cow::Borrowed(s) = original {
-                    Cow::Borrowed(&s[ofs..ofs + len])
-                } else {
-                    Cow::Owned(original[ofs..ofs + len].to_owned())
+            Self::Substring(ofs, len) => match original {
+                Cow::Borrowed(s) => Cow::Borrowed(&s[ofs..ofs + len]),
+                Cow::Owned(mut s) if ofs == 0 => {
+                    s.truncate(len);
+                    Cow::Owned(s)
                 }
-            }
+                Cow::Owned(s) => Cow::Owned(s[ofs..ofs + len].to_owned()),
+            },
         }
     }
 }
