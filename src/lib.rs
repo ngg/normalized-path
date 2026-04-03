@@ -52,6 +52,9 @@
 //! - In case-insensitive mode, Turkish İ (U+0130), dotless ı (U+0131), and
 //!   ASCII I/i are all deliberately normalized to the same form.  Users who
 //!   need to distinguish them cannot use case-insensitive mode.
+//! - Names containing unassigned Unicode code points are rejected.  This makes it
+//!   much more likely that normalization results for accepted names remain stable
+//!   when upgrading to a future Unicode version (see [Unicode version](#unicode-version)).
 //! - Path separators and multi-component paths are not handled.  This crate
 //!   operates on a single path element (one name between separators).  Support
 //!   for full paths may be added in a future version.

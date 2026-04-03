@@ -115,20 +115,20 @@ jobs:
       - run: cargo build --target wasm32-wasip1
       - run: cargo test --target wasm32-wasip1
 
-  fuzz-linux:
-    uses: ./.github/workflows/fuzz.yml
-    with:
-      runs-on: ubuntu-latest
-
-  fuzz-windows:
-    needs: fuzz-linux
-    uses: ./.github/workflows/fuzz.yml
-    with:
-      runs-on: windows-latest
-
   fuzz-macos:
-    needs: fuzz-windows
     uses: ./.github/workflows/fuzz.yml
     with:
       runs-on: macos-latest
       fork: 3
+
+  fuzz-windows:
+    needs: fuzz-macos
+    uses: ./.github/workflows/fuzz.yml
+    with:
+      runs-on: windows-latest
+
+  fuzz-linux:
+    needs: fuzz-windows
+    uses: ./.github/workflows/fuzz.yml
+    with:
+      runs-on: ubuntu-latest

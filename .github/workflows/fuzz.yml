@@ -59,6 +59,12 @@ jobs:
             # TODO: figure out why cmin on one platform loses coverage for the other,
             # even though apple_compatible_from_normalized_cs_fallback should keep parity.
             # cargo fuzz cmin "$target"
+            # -fork=N exits 0 even on crashes; check for crash artifacts.
+            if ls fuzz/artifacts/"$target"/* >/dev/null 2>&1; then
+              echo "Fuzz artifacts found for $target:"
+              ls fuzz/artifacts/"$target"/
+              exit 1
+            fi
           done
         shell: bash
         env:

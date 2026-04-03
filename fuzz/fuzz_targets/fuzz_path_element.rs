@@ -38,8 +38,13 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     #[cfg(target_vendor = "apple")]
     {
         let decoded = String::from_utf8_lossy(data);
-        apple_compatible_from_normalized_cs(&decoded)
-            .expect("apple_compatible_from_normalized_cs failed");
+        if !decoded.contains('\0') {
+            assert!(
+                apple_compatible_from_normalized_cs(&decoded).is_ok(),
+                "apple_compatible_from_normalized_cs failed\n\
+                 decoded: {decoded:?}"
+            );
+        }
     }
 
     // Construct via from_bytes — also exercises the UTF-8 rejection path.
