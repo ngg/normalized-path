@@ -36,6 +36,12 @@ pub fn is_starter(c: char) -> bool {
         == CanonicalCombiningClass::NotReordered
 }
 
+/// Whether `c` has Canonical Combining Class 230 (Above).
+#[must_use]
+pub fn is_above(c: char) -> bool {
+    CodePointMapData::<CanonicalCombiningClass>::new().get(c) == CanonicalCombiningClass::Above
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::borrow::Cow;

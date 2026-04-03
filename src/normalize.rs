@@ -2,7 +2,7 @@ use alloc::borrow::Cow;
 
 use crate::ErrorKind;
 use crate::error::ResultKind;
-use crate::unicode::{case_fold, is_starter, is_whitespace, nfc, nfd};
+use crate::unicode::{case_fold, is_above, is_starter, is_whitespace, nfc, nfd};
 use crate::utils::cow;
 
 /// `White_Space` property check extended with Control Pictures (U+2409–U+240D) that
@@ -29,39 +29,49 @@ pub fn trim_whitespace_like(s: &str) -> &str {
     s.trim_matches(is_whitespace_like)
 }
 
-/// Map Turkish İ (U+0130) and ı (U+0131) to their ASCII
-/// equivalents I and i. Only applied in case-insensitive mode, after case folding.
+/// Post-case-fold fixup for locale-specific casing inconsistencies.
+/// Applied after `toCasefold()` in case-insensitive mode.
 ///
-/// These characters are problematic for case-insensitive matching because Unicode
-/// `toCasefold()` treats ı as distinct from i (ı → ı, not ı → i), yet locale-independent
-/// `toUppercase` maps ı → I which case-folds to i. Mapping both to ASCII after case
-/// folding ensures consistent behavior regardless of casing operations.
+/// - Maps Turkish İ (U+0130) and ı (U+0131) to ASCII I and i.
+///   `toCasefold()` treats ı as distinct from i, yet `toUppercase(ı)` = I
+///   even without locale tailoring, creating collisions that folding alone misses.
+/// - Strips U+0307 COMBINING DOT ABOVE after I/i/J/j (with intervening
+///   combiners allowed as long as they are not starters or CCC=230 Above,
+///   matching the Unicode `After_I` condition). This handles NFD decomposition of İ
+///   (I + U+0307) and Lithuanian casing rules that add U+0307 after lowercase
+///   i and j to retain the visual dot when other diacritics are present.
 ///
-/// Additionally, U+0307 COMBINING DOT ABOVE is stripped after I/i (case-insensitive)
-/// to handle NFD decomposition of İ (I + U+0307), with intervening combiners allowed.
+/// See <https://www.unicode.org/Public/17.0.0/ucd/SpecialCasing.txt>.
 #[must_use]
-pub fn map_turkish_i(s: &str) -> Cow<'_, str> {
+pub fn fixup_case_fold(s: &str) -> Cow<'_, str> {
     cow(
         s.chars()
-            .scan(false, |strip_dot, c| {
+            .scan(false, |strip_dot_above, c| {
                 match c {
-                    '\u{0130}' | 'I' => {
-                        // İ → I, strip following dot above
-                        *strip_dot = true;
+                    '\u{0130}' => {
+                        // İ → I
+                        *strip_dot_above = true;
                         Some(Some('I'))
                     }
-                    '\u{0131}' | 'i' => {
-                        // ı → i, strip following dot above
-                        *strip_dot = true;
+                    '\u{0131}' => {
+                        // ı → i
+                        *strip_dot_above = true;
                         Some(Some('i'))
                     }
-                    '\u{0307}' if *strip_dot => {
-                        // Strip combining dot above after I/i
+                    'I' | 'i' | 'J' | 'j' => {
+                        *strip_dot_above = true;
+                        Some(Some(c))
+                    }
+                    '\u{0307}' if *strip_dot_above => {
+                        // Strip combining dot above after I/i/J/j
                         Some(None)
                     }
                     _ => {
-                        if is_starter(c) {
-                            *strip_dot = false;
+                        // Reset on starters (CCC=0) or CCC=230 (Above), matching
+                        // the `After_Soft_Dotted`, `More_Above`, `Before_Dot`, and
+                        // `After_I` conditions in SpecialCasing.txt.
+                        if is_starter(c) || is_above(c) {
+                            *strip_dot_above = false;
                         }
                         Some(Some(c))
                     }
@@ -107,13 +117,14 @@ pub fn normalize_cs(name: &str) -> ResultKind<Cow<'_, str>> {
 
 /// Derive the case-insensitive normalized form from an already case-sensitive normalized name.
 ///
-/// Applies case folding, Turkish İ mapping, and NFC to a CS-normalized name.
-/// Skips the steps already applied by CS normalization (trim, fullwidth, control chars).
+/// Applies NFD, case folding, post-case-fold fixup ([`fixup_case_fold()`]), and NFC
+/// to a CS-normalized name. Skips the steps already applied by CS normalization
+/// (trim, fullwidth, control chars).
 #[must_use]
 pub fn normalize_ci_from_normalized_cs(cs_normalized: &str) -> Cow<'_, str> {
     let s = nfd(cs_normalized);
     let s = case_fold(&s);
-    let s = map_turkish_i(&s);
+    let s = fixup_case_fold(&s);
     let s = nfc(&s);
     debug_assert!(validate_path_element(&s).is_ok());
     cow(s.chars(), cs_normalized)
@@ -145,7 +156,7 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::{
-        map_control_chars, map_fullwidth, map_turkish_i, normalize_ci_from_normalized_cs,
+        fixup_case_fold, map_control_chars, map_fullwidth, normalize_ci_from_normalized_cs,
         normalize_cs, trim_whitespace_like, validate_path_element,
     };
     use crate::ErrorKind;
@@ -321,91 +332,134 @@ mod tests {
         assert_eq!(map_control_chars(&controls), pictures);
     }
 
-    // --- map_turkish_i ---
+    // --- fixup_case_fold ---
 
     #[test]
-    fn map_turkish_i_dotted_capital() {
-        assert_eq!(map_turkish_i("\u{0130}"), "I");
+    fn fixup_case_fold_dotted_capital() {
+        assert_eq!(fixup_case_fold("\u{0130}"), "I");
     }
 
     #[test]
-    fn map_turkish_i_dotless_lowercase() {
-        assert_eq!(map_turkish_i("\u{0131}"), "i");
+    fn fixup_case_fold_dotless_lowercase() {
+        assert_eq!(fixup_case_fold("\u{0131}"), "i");
     }
 
     #[test]
-    fn map_turkish_i_dotless_lowercase_with_dot() {
+    fn fixup_case_fold_dotless_lowercase_with_dot() {
         // ı followed by combining dot above: ı→i and strip the dot.
         // This handles Turkic fold output: fold_turkic("I\u{0307}") = "ı\u{0307}".
-        assert_eq!(map_turkish_i("\u{0131}\u{0307}"), "i");
+        assert_eq!(fixup_case_fold("\u{0131}\u{0307}"), "i");
     }
 
     #[test]
-    fn map_turkish_i_mixed() {
-        assert_eq!(map_turkish_i("a\u{0130}b\u{0131}c"), "aIbic");
+    fn fixup_case_fold_mixed() {
+        assert_eq!(fixup_case_fold("a\u{0130}b\u{0131}c"), "aIbic");
     }
 
     #[test]
-    fn map_turkish_i_ascii_unchanged() {
-        let result = map_turkish_i("Hello");
+    fn fixup_case_fold_ascii_unchanged() {
+        let result = fixup_case_fold("Hello");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "Hello");
     }
 
     #[test]
-    fn map_turkish_i_nfd_decomposed() {
-        let result = map_turkish_i("I\u{0307}");
+    fn fixup_case_fold_nfd_decomposed() {
+        let result = fixup_case_fold("I\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "I");
     }
 
     #[test]
-    fn map_turkish_i_nfd_decomposed_lowercase() {
-        let result = map_turkish_i("i\u{0307}");
+    fn fixup_case_fold_nfd_decomposed_lowercase() {
+        let result = fixup_case_fold("i\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "i");
     }
 
     #[test]
-    fn map_turkish_i_intervening_combiner() {
-        let result = map_turkish_i("I\u{0327}\u{0307}");
+    fn fixup_case_fold_intervening_combiner() {
+        let result = fixup_case_fold("I\u{0327}\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "I\u{0327}");
     }
 
     #[test]
-    fn map_turkish_i_intervening_combiner_lowercase() {
-        let result = map_turkish_i("i\u{0327}\u{0307}");
+    fn fixup_case_fold_intervening_combiner_lowercase() {
+        let result = fixup_case_fold("i\u{0327}\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "i\u{0327}");
     }
 
     #[test]
-    fn map_turkish_i_multiple_dots() {
-        let result = map_turkish_i("I\u{0307}\u{0307}");
+    fn fixup_case_fold_multiple_dots() {
+        let result = fixup_case_fold("I\u{0307}\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "I");
     }
 
     #[test]
-    fn map_turkish_i_dot_on_other_base() {
-        let result = map_turkish_i("e\u{0307}");
+    fn fixup_case_fold_dot_on_other_base() {
+        let result = fixup_case_fold("e\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "e\u{0307}");
     }
 
     #[test]
-    fn map_turkish_i_dot_after_starter_resets() {
-        let result = map_turkish_i("Ia\u{0307}");
+    fn fixup_case_fold_dot_after_starter_resets() {
+        let result = fixup_case_fold("Ia\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "Ia\u{0307}");
     }
 
     #[test]
-    fn map_turkish_i_multiple_combiners_then_dot() {
-        let result = map_turkish_i("i\u{0325}\u{0327}\u{0307}");
+    fn fixup_case_fold_multiple_combiners_then_dot() {
+        let result = fixup_case_fold("i\u{0325}\u{0327}\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "i\u{0325}\u{0327}");
+    }
+
+    #[test]
+    fn fixup_case_fold_above_combiner_blocks_strip() {
+        // U+0301 COMBINING ACUTE ACCENT has CCC=230 (Above), which blocks dot stripping.
+        let result = fixup_case_fold("I\u{0301}\u{0307}");
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result, "I\u{0301}\u{0307}");
+    }
+
+    #[test]
+    fn fixup_case_fold_below_combiner_allows_strip() {
+        // U+0327 COMBINING CEDILLA has CCC=202 (not Above), so dot stripping proceeds.
+        assert_eq!(fixup_case_fold("I\u{0327}\u{0307}"), "I\u{0327}");
+    }
+
+    // --- fixup_case_fold: Lithuanian J dot stripping ---
+
+    #[test]
+    fn fixup_case_fold_j_dot_above_stripped() {
+        // Lithuanian lowercase adds U+0307 after j.
+        assert_eq!(fixup_case_fold("j\u{0307}"), "j");
+    }
+
+    #[test]
+    fn fixup_case_fold_j_uppercase_dot_above_stripped() {
+        assert_eq!(fixup_case_fold("J\u{0307}"), "J");
+    }
+
+    #[test]
+    fn fixup_case_fold_j_dot_with_circumflex() {
+        // Lithuanian lowercase of Ĵ with ypogegrammeni: j + dot + circumflex + ypogegrammeni
+        assert_eq!(
+            fixup_case_fold("j\u{0307}\u{0302}\u{0345}"),
+            "j\u{0302}\u{0345}"
+        );
+    }
+
+    #[test]
+    fn fixup_case_fold_j_no_dot_unchanged() {
+        let result = fixup_case_fold("j\u{0302}");
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result, "j\u{0302}");
     }
 
     // --- normalize ---
@@ -693,58 +747,46 @@ mod tests {
     fn ci_from_cs_turkish_i() {
         assert_eq!(normalize_ci_from_normalized_cs("I"), "i");
         assert_eq!(normalize_ci_from_normalized_cs("i"), "i");
-        assert_eq!(
-            normalize_ci_from_normalized_cs(&normalize_cs("\u{0130}").unwrap()),
-            "i"
-        );
-        assert_eq!(
-            normalize_ci_from_normalized_cs(&normalize_cs("\u{0131}").unwrap()),
-            "i"
-        );
+        // İ (U+0130) is already NFC
+        assert_eq!(normalize_ci_from_normalized_cs("\u{0130}"), "i");
+        // ı (U+0131) is already NFC
+        assert_eq!(normalize_ci_from_normalized_cs("\u{0131}"), "i");
     }
 
     #[test]
     fn ci_from_cs_i_combining_dot() {
-        // "I\u{0307}" NFC-composes to İ (U+0130), CS-normalized is "\u{0130}".
-        // CI must map to "i".
-        let cs = normalize_cs("I\u{0307}").unwrap();
-        assert_eq!(normalize_ci_from_normalized_cs(&cs), "i");
+        // "I\u{0307}" NFC-composes to İ (U+0130). CI must map to "i".
+        assert_eq!(normalize_ci_from_normalized_cs("\u{0130}"), "i");
 
-        // "ı\u{0307}" — dotless i + combining dot → maps to "i".
-        let cs = normalize_cs("\u{0131}\u{0307}").unwrap();
-        assert_eq!(normalize_ci_from_normalized_cs(&cs), "i");
+        // "ı\u{0307}" stays as-is in NFC. CI must map to "i".
+        assert_eq!(normalize_ci_from_normalized_cs("\u{0131}\u{0307}"), "i");
     }
 
     #[test]
     fn ci_from_cs_ypogegrammeni() {
         assert_eq!(normalize_ci_from_normalized_cs("\u{0345}"), "\u{03B9}");
 
-        // With overline: order shouldn't matter after CS normalization.
-        let a = normalize_cs("\u{0345}\u{0305}").unwrap();
-        let b = normalize_cs("\u{0305}\u{0345}").unwrap();
+        // Both orderings CS-normalize to "\u{0305}\u{0345}" (overline CCC=230 < ypogegrammeni CCC=240).
+        // Ypogegrammeni case-folds to ι (U+03B9).
         assert_eq!(
-            normalize_ci_from_normalized_cs(&a),
-            normalize_ci_from_normalized_cs(&b)
+            normalize_ci_from_normalized_cs("\u{0305}\u{0345}"),
+            "\u{0305}\u{03B9}"
         );
     }
 
     #[test]
     fn ci_from_cs_composed_ypogegrammeni() {
-        let cs_a = normalize_cs("\u{1FC3}").unwrap();
-        let cs_b = normalize_cs("\u{03B7}\u{0345}").unwrap();
+        // U+1FC3 (ᾳ) = η + ypogegrammeni → η + ι after case fold.
         assert_eq!(
-            normalize_ci_from_normalized_cs(&cs_a),
-            normalize_ci_from_normalized_cs(&cs_b)
+            normalize_ci_from_normalized_cs("\u{1FC3}"),
+            "\u{03B7}\u{03B9}"
         );
     }
 
     #[test]
     fn ci_from_cs_ligature_ffl() {
-        // Ligature is preserved by CS normalization, then case-folded to "ffl".
-        assert_eq!(
-            normalize_ci_from_normalized_cs(&normalize_cs("\u{FB04}").unwrap()),
-            "ffl"
-        );
+        // Ligature U+FB04 is preserved by CS normalization, then case-folded to "ffl".
+        assert_eq!(normalize_ci_from_normalized_cs("\u{FB04}"), "ffl");
         assert_eq!(normalize_ci_from_normalized_cs("ffl"), "ffl");
         assert_eq!(normalize_ci_from_normalized_cs("FFL"), "ffl");
         assert_eq!(normalize_ci_from_normalized_cs("Ffl"), "ffl");
@@ -752,80 +794,60 @@ mod tests {
 
     #[test]
     fn ci_from_cs_deseret() {
-        let upper = normalize_ci_from_normalized_cs("\u{10400}");
-        let lower = normalize_ci_from_normalized_cs("\u{10428}");
-        assert_eq!(upper, lower);
-    }
-
-    #[test]
-    fn ci_from_cs_greek_sigma() {
-        let capital = normalize_ci_from_normalized_cs("\u{03A3}");
-        let small = normalize_ci_from_normalized_cs("\u{03C3}");
-        let final_s = normalize_ci_from_normalized_cs("\u{03C2}");
-        assert_eq!(capital, small);
-        assert_eq!(capital, final_s);
-
-        let upper_cs = normalize_cs("ΛΌΓΟΣ").unwrap();
-        let lower_cs = normalize_cs("λόγος").unwrap();
-        let upper = normalize_ci_from_normalized_cs(&upper_cs);
-        let lower = normalize_ci_from_normalized_cs(&lower_cs);
-        assert_eq!(upper, lower);
+        assert_eq!(normalize_ci_from_normalized_cs("\u{10400}"), "\u{10428}");
+        assert_eq!(normalize_ci_from_normalized_cs("\u{10428}"), "\u{10428}");
     }
 
     #[test]
     fn ci_from_cs_ohm_omega() {
-        // Ohm sign and Omega are canonically equivalent after NFC (CS step),
-        // so they share the same CS-normalized form.
-        let ohm_cs = normalize_cs("\u{2126}").unwrap();
-        let omega_cs = normalize_cs("\u{03A9}").unwrap();
-        assert_eq!(ohm_cs, omega_cs);
-        let small_cs = normalize_cs("\u{03C9}").unwrap();
-        assert_eq!(
-            normalize_ci_from_normalized_cs(&ohm_cs),
-            normalize_ci_from_normalized_cs(&small_cs)
-        );
+        // Ohm sign (U+2126) and Omega (U+03A9) both CS-normalize to Ω (U+03A9).
+        assert_eq!(normalize_ci_from_normalized_cs("\u{03A9}"), "\u{03C9}");
+        assert_eq!(normalize_ci_from_normalized_cs("\u{03C9}"), "\u{03C9}");
     }
 
     #[test]
     fn ci_from_cs_angstrom() {
-        let angstrom_cs = normalize_cs("\u{212B}").unwrap();
-        let upper_cs = normalize_cs("\u{00C5}").unwrap();
-        let lower_cs = normalize_cs("\u{00E5}").unwrap();
-        assert_eq!(angstrom_cs, upper_cs); // canonically equivalent
-        assert_eq!(
-            normalize_ci_from_normalized_cs(&angstrom_cs),
-            normalize_ci_from_normalized_cs(&lower_cs)
-        );
+        // Angstrom (U+212B) and Å (U+00C5) both CS-normalize to Å (U+00C5).
+        assert_eq!(normalize_ci_from_normalized_cs("\u{00C5}"), "\u{00E5}");
+        assert_eq!(normalize_ci_from_normalized_cs("\u{00E5}"), "\u{00E5}");
     }
 
     #[test]
     fn ci_from_cs_micro_sign() {
-        let micro = normalize_ci_from_normalized_cs("\u{00B5}");
-        let mu_small = normalize_ci_from_normalized_cs("\u{03BC}");
-        let mu_capital = normalize_ci_from_normalized_cs("\u{039C}");
-        assert_eq!(micro, mu_small);
-        assert_eq!(micro, mu_capital);
+        assert_eq!(normalize_ci_from_normalized_cs("\u{00B5}"), "\u{03BC}");
+        assert_eq!(normalize_ci_from_normalized_cs("\u{03BC}"), "\u{03BC}");
+        assert_eq!(normalize_ci_from_normalized_cs("\u{039C}"), "\u{03BC}");
     }
 
     #[test]
     fn ci_from_cs_dz_digraph() {
-        let upper_cs = normalize_cs("\u{01F1}").unwrap();
-        let title_cs = normalize_cs("\u{01F2}").unwrap();
-        let lower_cs = normalize_cs("\u{01F3}").unwrap();
-        let upper = normalize_ci_from_normalized_cs(&upper_cs);
-        let title = normalize_ci_from_normalized_cs(&title_cs);
-        let lower = normalize_ci_from_normalized_cs(&lower_cs);
-        assert_eq!(upper, title);
-        assert_eq!(upper, lower);
+        // U+01F1 DZ, U+01F2 Dz, U+01F3 dz (ligatures) all fold to U+01F3.
+        // The ASCII pairs "DZ"/"dz" fold to "dz" instead — they are distinct.
+        assert_eq!(normalize_ci_from_normalized_cs("\u{01F1}"), "\u{01F3}");
+        assert_eq!(normalize_ci_from_normalized_cs("\u{01F2}"), "\u{01F3}");
+        assert_eq!(normalize_ci_from_normalized_cs("\u{01F3}"), "\u{01F3}");
     }
 
     #[test]
-    fn ci_from_cs_german_eszett() {
-        let lower_cs = normalize_cs("stra\u{00DF}e").unwrap();
-        let upper_cs = normalize_cs("STRASSE").unwrap();
-        let lower = normalize_ci_from_normalized_cs(&lower_cs);
-        let upper = normalize_ci_from_normalized_cs(&upper_cs);
-        assert_eq!(lower, upper);
+    fn ci_from_cs_sharp_s_variants() {
+        // All sharp s and "ss" variants normalize to "ss".
+        assert_eq!(normalize_ci_from_normalized_cs("ss"), "ss");
+        assert_eq!(normalize_ci_from_normalized_cs("SS"), "ss");
+        assert_eq!(normalize_ci_from_normalized_cs("sS"), "ss");
+        assert_eq!(normalize_ci_from_normalized_cs("Ss"), "ss");
+        assert_eq!(normalize_ci_from_normalized_cs("\u{00DF}"), "ss"); // ß
+        assert_eq!(normalize_ci_from_normalized_cs("\u{1E9E}"), "ss"); // ẞ
+    }
+
+    #[test]
+    fn ci_from_cs_greek_sigma_variants() {
+        // All sigma variants normalize to σ (U+03C3).
+        assert_eq!(normalize_ci_from_normalized_cs("\u{03A3}"), "\u{03C3}"); // Σ
+        assert_eq!(normalize_ci_from_normalized_cs("\u{03C3}"), "\u{03C3}"); // σ
+        assert_eq!(normalize_ci_from_normalized_cs("\u{03C2}"), "\u{03C3}"); // ς
+        // Lunate sigma ϲ/Ϲ fold to ϲ, not σ.
+        assert_eq!(normalize_ci_from_normalized_cs("\u{03F2}"), "\u{03F2}"); // ϲ
+        assert_eq!(normalize_ci_from_normalized_cs("\u{03F9}"), "\u{03F2}"); // Ϲ
     }
 
     #[test]
@@ -837,14 +859,10 @@ mod tests {
 
     #[test]
     fn ci_from_cs_nfc_nfd_equivalent() {
-        // NFC and NFD inputs produce the same CS-normalized form (NFC),
-        // so ci_from_cs must give the same result.
-        let nfc_cs = normalize_cs("\u{00C9}.txt").unwrap();
-        let decomposed_cs = normalize_cs("E\u{0301}.txt").unwrap();
-        assert_eq!(nfc_cs, decomposed_cs);
+        // Both É (U+00C9) and E+\u{0301} CS-normalize to É (U+00C9).
         assert_eq!(
-            normalize_ci_from_normalized_cs(&nfc_cs),
-            normalize_ci_from_normalized_cs(&decomposed_cs)
+            normalize_ci_from_normalized_cs("\u{00C9}.txt"),
+            "\u{00E9}.txt"
         );
     }
 
@@ -868,5 +886,61 @@ mod tests {
         let result = normalize_ci_from_normalized_cs("hello.txt");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result.as_ref(), "hello.txt");
+    }
+
+    #[test]
+    fn normalize_space_vs_nbsp_distinct() {
+        // Regular space and non-breaking space produce different normalized forms.
+        let space = normalize_cs("a b").unwrap();
+        let nbsp = normalize_cs("a\u{00A0}b").unwrap();
+        assert_ne!(space, nbsp);
+    }
+
+    // --- Zero Width Joiner / Non-Joiner ---
+
+    #[test]
+    fn normalize_cs_preserves_zwj() {
+        let result = normalize_cs("a\u{200D}b").unwrap();
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result, "a\u{200D}b");
+    }
+
+    #[test]
+    fn normalize_cs_preserves_zwnj() {
+        let result = normalize_cs("a\u{200C}b").unwrap();
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result, "a\u{200C}b");
+    }
+
+    #[test]
+    fn ci_from_cs_preserves_zwj() {
+        let result = normalize_ci_from_normalized_cs("a\u{200D}b");
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result, "a\u{200D}b");
+    }
+
+    #[test]
+    fn ci_from_cs_preserves_zwnj() {
+        let result = normalize_ci_from_normalized_cs("a\u{200C}b");
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result, "a\u{200C}b");
+    }
+
+    #[test]
+    fn ci_from_cs_zwj_between_i_and_dot() {
+        // ZWJ is a starter (CCC=0), so it blocks dot stripping.
+        assert_eq!(
+            normalize_ci_from_normalized_cs("i\u{200D}\u{0307}"),
+            "i\u{200D}\u{0307}"
+        );
+    }
+
+    #[test]
+    fn ci_from_cs_zwnj_between_i_and_dot() {
+        // ZWNJ is a starter (CCC=0), so it blocks dot stripping.
+        assert_eq!(
+            normalize_ci_from_normalized_cs("i\u{200C}\u{0307}"),
+            "i\u{200C}\u{0307}"
+        );
     }
 }

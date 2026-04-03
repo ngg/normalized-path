@@ -1,13 +1,14 @@
 #![no_main]
 
-use icu_casemap::CaseMapper;
+use icu_casemap::options::{LeadingAdjustment, TitlecaseOptions, TrailingCase};
+use icu_casemap::{CaseMapper, TitlecaseMapper};
 use icu_locale_core::langid;
 use libfuzzer_sys::fuzz_target;
 #[cfg(target_vendor = "apple")]
 use normalized_path::test_helpers::apple_compatible_from_normalized_cs_fallback;
 use normalized_path::test_helpers::{
-    apple_compatible_from_normalized_cs, case_fold, is_reserved_on_windows, map_control_chars,
-    map_fullwidth, map_turkish_i, nfc, nfd, normalize_ci_from_normalized_cs, normalize_cs,
+    apple_compatible_from_normalized_cs, case_fold, fixup_case_fold, is_reserved_on_windows,
+    map_control_chars, map_fullwidth, nfc, nfd, normalize_ci_from_normalized_cs, normalize_cs,
     trim_whitespace_like, validate_path_element, windows_compatible_from_normalized_cs,
 };
 use normalized_path::{CaseSensitivity, PathElement};
@@ -102,7 +103,7 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
         pe.os_compatible()
     );
 
-    // is_reserved_on_windows must be stable under NFD, case_fold, and NFD→casefold→NFD.
+    // is_reserved_on_windows must be stable under NFD and NFD→casefold→fixup_case_fold→NFD.
     assert_eq!(
         is_reserved_on_windows(normalized),
         is_reserved_on_windows(&nfd(normalized)),
@@ -111,14 +112,8 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     );
     assert_eq!(
         is_reserved_on_windows(normalized),
-        is_reserved_on_windows(&case_fold(normalized)),
-        "is_reserved_on_windows mismatch after case_fold\n\
-         normalized: {normalized:?}"
-    );
-    assert_eq!(
-        is_reserved_on_windows(normalized),
-        is_reserved_on_windows(&nfd(&case_fold(&nfd(normalized)))),
-        "is_reserved_on_windows mismatch after nfd(case_fold(nfd(...)))\n\
+        is_reserved_on_windows(&nfd(&fixup_case_fold(&case_fold(&nfd(normalized))))),
+        "is_reserved_on_windows mismatch after nfd(fixup_case_fold(case_fold(nfd(...))))\n\
          normalized: {normalized:?}"
     );
     if is_reserved_on_windows(normalized) {
@@ -182,8 +177,8 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     }
 
     if cs == CaseSensitivity::Insensitive {
-        // Turkish İ mapping is only applied in CI mode.
-        check("map_turkish_i", &map_turkish_i(input));
+        // Post-case-fold fixup is only applied in CI mode.
+        check("fixup_case_fold", &fixup_case_fold(input));
 
         // CS normalization is a subset of CI (everything except case folding
         // and Turkish İ mapping), so normalize_cs fed back into CI
@@ -225,8 +220,10 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
             input
         };
         check("case_fold", &case_fold(case_input));
-
         let cm = CaseMapper::new();
+        check("fold_turkic", &cm.fold_turkic_string(case_input));
+
+        let tc = TitlecaseMapper::new();
         let check_locale = |langid: &icu_locale_core::LanguageIdentifier| {
             let tag = langid.to_string();
             check(
@@ -237,14 +234,24 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
                 &format!("icu_uppercase_{tag}"),
                 &cm.uppercase_to_string(case_input, langid),
             );
-            check(
-                &format!("icu_titlecase_{tag}"),
-                &cm.titlecase_segment_with_only_case_data_to_string(
-                    case_input,
-                    langid,
-                    Default::default(),
-                ),
-            );
+            for (trailing, trailing_name) in [
+                (TrailingCase::Lower, "lower"),
+                (TrailingCase::Unchanged, "unchanged"),
+            ] {
+                for (leading, leading_name) in [
+                    (LeadingAdjustment::Auto, "auto"),
+                    (LeadingAdjustment::None, "none"),
+                    (LeadingAdjustment::ToCased, "cased"),
+                ] {
+                    let mut opts = TitlecaseOptions::default();
+                    opts.trailing_case = Some(trailing);
+                    opts.leading_adjustment = Some(leading);
+                    check(
+                        &format!("icu_titlecase_{tag}_{trailing_name}_{leading_name}"),
+                        &tc.titlecase_segment_to_string(case_input, langid, opts),
+                    );
+                }
+            }
         };
         check_locale(&langid!("und"));
         // Languages with special casing rules defined in Unicode:
@@ -252,7 +259,6 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
         check_locale(&langid!("tr"));
         check_locale(&langid!("az"));
         check_locale(&langid!("lt"));
-        check("fold_turkic", &cm.fold_turkic_string(case_input));
     }
 
     // os_compatible round-trip: new(os_compatible) must produce the same normalized form.

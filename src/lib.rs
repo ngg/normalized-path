@@ -47,6 +47,9 @@
 //! - Fullwidth and ASCII variants of the same character (e.g. `Ａ` vs `A`) are
 //!   deliberately normalized to the same form.  Users who need to distinguish
 //!   them cannot use this crate.
+//! - In case-insensitive mode, Turkish İ (U+0130), dotless ı (U+0131), and
+//!   ASCII I/i are all deliberately normalized to the same form.  Users who
+//!   need to distinguish them cannot use case-insensitive mode.
 //! - Path separators and multi-component paths are not handled.  This crate
 //!   operates on a single path element (one name between separators).  Support
 //!   for full paths may be added in a future version.
@@ -95,23 +98,27 @@
 //! 6. **NFC composition** -- canonical composition to produce the shortest equivalent
 //!    form.
 //!
-//! In **case-insensitive** mode, three additional steps are applied after the above:
+//! In **case-insensitive** mode, four additional steps are applied after the above:
 //!
-//! 7. **NFD decomposition** (again, on the NFC result).  Steps 7--8--10 implement
-//!    the Unicode canonical caseless matching algorithm (Definition D145): *"A string
-//!    X is a canonical caseless match for a string Y if and only if:
-//!    NFD(toCasefold(NFD(X))) = NFD(toCasefold(NFD(Y)))"*, with an additional
-//!    Turkish I/i fixup in step 9.
+//! 7. **NFD decomposition** (again, on the NFC result).  Steps 7, 8, and 10
+//!    implement the Unicode canonical caseless matching algorithm (Definition D145):
+//!    *"A string X is a canonical caseless match for a string Y if and only if:
+//!    NFD(toCasefold(NFD(X))) = NFD(toCasefold(NFD(Y)))"*.  Step 9 extends this
+//!    with a post-case-fold fixup for Turkish/Azerbaijani and Lithuanian casing.
 //!
-//! 8. **Unicode `toCasefold()`** -- locale-independent case folding.
+//! 8. **Unicode `toCasefold()`** -- locale-independent full case folding.
 //!
-//! 9. **Turkish I/i mapping** -- maps U+0130 (İ) and U+0131 (ı) to ASCII I and i
-//!    respectively, and strips U+0307 COMBINING DOT ABOVE after I/i (with intervening
-//!    non-starter combiners allowed).  Unicode `toCasefold()` is locale-independent
-//!    and treats ı as distinct from i (ı folds to itself), yet `toUppercase(ı)` = I
-//!    even without locale tailoring, and I folds back to i -- creating a collision
-//!    that `toCasefold()` alone misses.
-//!    This post-folding fixup neutralizes those inconsistencies.
+//! 9. **Post-case-fold fixup** -- maps U+0130 (İ) and U+0131 (ı) to ASCII I and i
+//!    respectively, and strips U+0307 COMBINING DOT ABOVE after I/i/J/j
+//!    (blocked by intervening starters or CCC=230 Above combiners, matching the
+//!    Unicode `After_I` condition).  This neutralizes two
+//!    locale-specific casing inconsistencies that `toCasefold()` alone misses:
+//!    - **Turkish/Azerbaijani:** `toCasefold()` treats ı as distinct from i
+//!      (ı folds to itself), yet `toUppercase(ı)` = I even without locale
+//!      tailoring, and I folds back to i -- creating a collision.
+//!    - **Lithuanian:** casing rules add U+0307 after lowercase i and j to
+//!      retain the visual dot when other diacritics are present; stripping it
+//!      ensures stability under Lithuanian casing.
 //!
 //! 10. **NFC composition** (final) -- recompose after case folding to produce the
 //!     canonical NFC output.
@@ -224,12 +231,19 @@
 //!
 //! ```
 //! # use std::collections::BTreeSet;
-//! # use normalized_path::{PathElement, CaseSensitive};
-//! let names = ["README.md", "readme.md", "Readme.MD"];
-//! let tree: BTreeSet<_> = names.iter()
+//! # use normalized_path::{PathElement, CaseSensitive, CaseInsensitive};
+//! // "ss", "SS", "sS", "Ss", sharp s (ß), capital sharp s (ẞ)
+//! let names = ["ss", "SS", "sS", "Ss", "\u{00DF}", "\u{1E9E}"];
+//!
+//! let cs: BTreeSet<_> = names.iter()
 //!     .map(|n| PathElement::new(*n, CaseSensitive).unwrap())
 //!     .collect();
-//! assert_eq!(tree.len(), 3); // case-sensitive: all distinct
+//! assert_eq!(cs.len(), 6); // case-sensitive: all distinct
+//!
+//! let ci: BTreeSet<_> = names.iter()
+//!     .map(|n| PathElement::new(*n, CaseInsensitive).unwrap())
+//!     .collect();
+//! assert_eq!(ci.len(), 1); // case-insensitive: all normalize to "ss"
 //! ```
 //!
 //! # Unicode version
@@ -273,7 +287,7 @@ pub use path_element::{PathElement, PathElementCI, PathElementCS, PathElementGen
 pub mod test_helpers {
     pub use crate::error::ResultKind;
     pub use crate::normalize::{
-        is_whitespace_like, map_control_chars, map_fullwidth, map_turkish_i,
+        fixup_case_fold, is_whitespace_like, map_control_chars, map_fullwidth,
         normalize_ci_from_normalized_cs, normalize_cs, trim_whitespace_like, validate_path_element,
     };
     pub use crate::os::{
