@@ -22,6 +22,10 @@ pub enum ErrorKind {
     /// terminator, silently truncating the name.
     ContainsNullByte,
 
+    /// The name contains a Unicode code point that is not assigned in the
+    /// version of Unicode used by this crate.
+    ContainsUnassignedChar,
+
     /// Apple's `CFStringGetFileSystemRepresentation` failed.
     #[cfg(target_vendor = "apple")]
     GetFileSystemRepresentationError,
@@ -45,6 +49,7 @@ impl core::fmt::Display for ErrorKind {
             Self::ParentDirectoryMarker => f.write_str("parent directory marker"),
             Self::ContainsForwardSlash => f.write_str("contains forward slash"),
             Self::ContainsNullByte => f.write_str("contains null byte"),
+            Self::ContainsUnassignedChar => f.write_str("contains unassigned character"),
             #[cfg(target_vendor = "apple")]
             Self::GetFileSystemRepresentationError => {
                 f.write_str("CFStringGetFileSystemRepresentation failed")
@@ -141,6 +146,10 @@ mod tests {
         assert_eq!(
             ErrorKind::ContainsNullByte.to_string(),
             "contains null byte"
+        );
+        assert_eq!(
+            ErrorKind::ContainsUnassignedChar.to_string(),
+            "contains unassigned character"
         );
     }
 

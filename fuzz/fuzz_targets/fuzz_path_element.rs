@@ -35,13 +35,23 @@ fn unmap_control_chars(s: &str) -> String {
 }
 
 fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
+    #[cfg(target_vendor = "apple")]
+    {
+        let decoded = String::from_utf8_lossy(data);
+        apple_compatible_from_normalized_cs(&decoded)
+            .expect("apple_compatible_from_normalized_cs failed");
+    }
+
     // Construct via from_bytes — also exercises the UTF-8 rejection path.
     let Ok(pe) = PathElement::from_bytes(data, cs) else {
         return;
     };
     let input = pe.original();
     let normalized = pe.normalized();
+    validate_path_element(input).expect("validate_path_element must accept original");
     validate_path_element(normalized).expect("validate_path_element must accept normalized output");
+    validate_path_element(pe.os_compatible())
+        .expect("validate_path_element must accept os_compatible output");
 
     // from_utf8_lossy of the raw data must produce the same original.
     let decoded = String::from_utf8_lossy(data);

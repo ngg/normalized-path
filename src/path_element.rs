@@ -12,7 +12,7 @@ use crate::utils::SubstringOrOwned;
 /// A validated, normalized, **case-sensitive** single path element.
 ///
 /// Takes a raw path element name, validates it (rejecting empty strings, `.`, `..`,
-/// and strings containing `/` or `\0`), normalizes it, and computes an OS-compatible
+/// strings containing `/` or `\0`, and unassigned Unicode characters), normalizes it, and computes an OS-compatible
 /// presentation form.
 ///
 /// Equality, ordering, and hashing are based on the **normalized** form.
@@ -23,7 +23,7 @@ pub type PathElementCS<'a> = PathElementGeneric<'a, CaseSensitive>;
 /// A validated, normalized, **case-insensitive** single path element.
 ///
 /// Takes a raw path element name, validates it (rejecting empty strings, `.`, `..`,
-/// and strings containing `/` or `\0`), normalizes it case-insensitively, and computes
+/// strings containing `/` or `\0`, and unassigned Unicode characters), normalizes it case-insensitively, and computes
 /// an OS-compatible presentation form.
 ///
 /// Equality, ordering, and hashing are based on the **normalized** (case-folded) form.
@@ -34,7 +34,7 @@ pub type PathElementCI<'a> = PathElementGeneric<'a, CaseInsensitive>;
 /// A validated, normalized single path element with **runtime-selected** case sensitivity.
 ///
 /// Takes a raw path element name, validates it (rejecting empty strings, `.`, `..`,
-/// and strings containing `/` or `\0`), normalizes it, and computes an OS-compatible
+/// strings containing `/` or `\0`, and unassigned Unicode characters), normalizes it, and computes an OS-compatible
 /// presentation form.
 /// Case sensitivity is chosen at construction time via the [`CaseSensitivity`] enum.
 ///
@@ -47,7 +47,7 @@ pub type PathElement<'a> = PathElementGeneric<'a, CaseSensitivity>;
 /// A validated, normalized single path element.
 ///
 /// `PathElementGeneric` takes a raw path element name, validates it (rejecting empty
-/// strings, `.`, `..`, and strings containing `/` or `\0`), normalizes it through a Unicode normalization pipeline,
+/// strings, `.`, `..`, strings containing `/` or `\0`, and unassigned Unicode characters), normalizes it through a Unicode normalization pipeline,
 /// and computes an OS-compatible presentation form. All three views -- original,
 /// normalized, and OS-compatible -- are accessible without re-computation.
 ///

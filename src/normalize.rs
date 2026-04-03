@@ -2,7 +2,9 @@ use alloc::borrow::Cow;
 
 use crate::ErrorKind;
 use crate::error::ResultKind;
-use crate::unicode::{case_fold, is_above, is_soft_dotted, is_starter, is_whitespace, nfc, nfd};
+use crate::unicode::{
+    case_fold, is_above, is_assigned, is_soft_dotted, is_starter, is_whitespace, nfc, nfd,
+};
 use crate::utils::cow;
 
 /// `White_Space` property check extended with Control Pictures (U+2409–U+240D) that
@@ -137,19 +139,27 @@ pub fn normalize_ci_from_normalized_cs(cs_normalized: &str) -> Cow<'_, str> {
 
 /// Validate a normalized path element name.
 ///
-/// Rejects empty strings, `.`, `..`, names containing `/`, and names containing `\0`.
+/// Rejects empty strings, `.`, `..`, names containing `/`, `\0`, or unassigned
+/// Unicode characters.
 ///
 /// # Errors
 /// Returns an error if the name is invalid.
 pub fn validate_path_element(name: &str) -> ResultKind<()> {
     match name {
-        "" => Err(ErrorKind::Empty),
-        "." => Err(ErrorKind::CurrentDirectoryMarker),
-        ".." => Err(ErrorKind::ParentDirectoryMarker),
-        _ if name.contains('\0') => Err(ErrorKind::ContainsNullByte),
-        _ if name.contains('/') => Err(ErrorKind::ContainsForwardSlash),
-        _ => Ok(()),
+        "" => return Err(ErrorKind::Empty),
+        "." => return Err(ErrorKind::CurrentDirectoryMarker),
+        ".." => return Err(ErrorKind::ParentDirectoryMarker),
+        _ => {}
     }
+    for c in name.chars() {
+        match c {
+            '\0' => return Err(ErrorKind::ContainsNullByte),
+            '/' => return Err(ErrorKind::ContainsForwardSlash),
+            _ if !is_assigned(c) => return Err(ErrorKind::ContainsUnassignedChar),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -716,7 +726,29 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn validate_unassigned_rejected() {
+        assert!(matches!(
+            validate_path_element("a\u{0378}b"),
+            Err(ErrorKind::ContainsUnassignedChar)
+        ));
+    }
+
+    #[test]
+    fn validate_assigned_accepted() {
+        assert!(validate_path_element("hello.txt").is_ok());
+        assert!(validate_path_element("\u{1FAEA}").is_ok()); // DISTORTED FACE
+    }
+
     // --- normalize_cs ---
+
+    #[test]
+    fn normalize_cs_unassigned_rejected() {
+        assert!(matches!(
+            normalize_cs("a\u{0378}b"),
+            Err(ErrorKind::ContainsUnassignedChar)
+        ));
+    }
 
     #[test]
     fn normalize_cs_null_byte_rejected() {

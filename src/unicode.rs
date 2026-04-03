@@ -2,7 +2,7 @@ use alloc::borrow::Cow;
 
 use icu_casemap::CaseMapper;
 use icu_normalizer::{ComposingNormalizer, DecomposingNormalizer};
-use icu_properties::props::{CanonicalCombiningClass, SoftDotted, WhiteSpace};
+use icu_properties::props::{CanonicalCombiningClass, GeneralCategory, SoftDotted, WhiteSpace};
 use icu_properties::{CodePointMapData, CodePointSetData};
 
 /// NFD normalization (canonical decomposition).
@@ -48,6 +48,12 @@ pub fn is_soft_dotted(c: char) -> bool {
     CodePointSetData::new::<SoftDotted>().contains(c)
 }
 
+/// Whether `c` is an assigned character (not `GeneralCategory::Unassigned`).
+#[must_use]
+pub fn is_assigned(c: char) -> bool {
+    CodePointMapData::<GeneralCategory>::new().get(c) != GeneralCategory::Unassigned
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::borrow::Cow;
@@ -55,7 +61,9 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{case_fold, is_above, is_soft_dotted, is_starter, is_whitespace, nfc, nfd};
+    use super::{
+        case_fold, is_above, is_assigned, is_soft_dotted, is_starter, is_whitespace, nfc, nfd,
+    };
 
     // --- nfd / nfc ---
 
@@ -183,6 +191,90 @@ mod tests {
                 folded_chars[0] as u32
             );
         }
+    }
+
+    #[test]
+    fn soft_dotted_exhaustive() {
+        // Complete list of Soft_Dotted characters in Unicode 17.0.0.
+        // Source: https://www.unicode.org/Public/17.0.0/ucd/PropList.txt
+        #[rustfmt::skip]
+        const SOFT_DOTTED: &[u32] = &[
+            0x0069, 0x006A,             // LATIN SMALL LETTER I..J
+            0x012F,                     // LATIN SMALL LETTER I WITH OGONEK
+            0x0249,                     // LATIN SMALL LETTER J WITH STROKE
+            0x0268,                     // LATIN SMALL LETTER I WITH STROKE
+            0x029D,                     // LATIN SMALL LETTER J WITH CROSSED-TAIL
+            0x02B2,                     // MODIFIER LETTER SMALL J
+            0x03F3,                     // GREEK LETTER YOT
+            0x0456,                     // CYRILLIC SMALL LETTER BYELORUSSIAN-UKRAINIAN I
+            0x0458,                     // CYRILLIC SMALL LETTER JE
+            0x1D62,                     // LATIN SUBSCRIPT SMALL LETTER I
+            0x1D96,                     // LATIN SMALL LETTER I WITH RETROFLEX HOOK
+            0x1DA4,                     // MODIFIER LETTER SMALL I WITH STROKE
+            0x1DA8,                     // MODIFIER LETTER SMALL J WITH CROSSED-TAIL
+            0x1E2D,                     // LATIN SMALL LETTER I WITH TILDE BELOW
+            0x1ECB,                     // LATIN SMALL LETTER I WITH DOT BELOW
+            0x2071,                     // SUPERSCRIPT LATIN SMALL LETTER I
+            0x2148, 0x2149,             // DOUBLE-STRUCK ITALIC SMALL I..J
+            0x2C7C,                     // LATIN SUBSCRIPT SMALL LETTER J
+            0x1D422, 0x1D423,           // MATHEMATICAL BOLD SMALL I..J
+            0x1D456, 0x1D457,           // MATHEMATICAL ITALIC SMALL I..J
+            0x1D48A, 0x1D48B,           // MATHEMATICAL BOLD ITALIC SMALL I..J
+            0x1D4BE, 0x1D4BF,           // MATHEMATICAL SCRIPT SMALL I..J
+            0x1D4F2, 0x1D4F3,           // MATHEMATICAL BOLD SCRIPT SMALL I..J
+            0x1D526, 0x1D527,           // MATHEMATICAL FRAKTUR SMALL I..J
+            0x1D55A, 0x1D55B,           // MATHEMATICAL DOUBLE-STRUCK SMALL I..J
+            0x1D58E, 0x1D58F,           // MATHEMATICAL BOLD FRAKTUR SMALL I..J
+            0x1D5C2, 0x1D5C3,           // MATHEMATICAL SANS-SERIF SMALL I..J
+            0x1D5F6, 0x1D5F7,           // MATHEMATICAL SANS-SERIF BOLD SMALL I..J
+            0x1D62A, 0x1D62B,           // MATHEMATICAL SANS-SERIF ITALIC SMALL I..J
+            0x1D65E, 0x1D65F,           // MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL I..J
+            0x1D692, 0x1D693,           // MATHEMATICAL MONOSPACE SMALL I..J
+            0x1DF1A,                    // LATIN SMALL LETTER I WITH STROKE AND RETROFLEX HOOK
+            0x1E04C, 0x1E04D,           // MODIFIER LETTER CYRILLIC SMALL BYELORUSSIAN-UKRAINIAN I..JE
+            0x1E068,                    // CYRILLIC SUBSCRIPT SMALL LETTER BYELORUSSIAN-UKRAINIAN I
+        ];
+        let mut found = alloc::vec::Vec::new();
+        for cp in 0..=0x10_FFFFu32 {
+            let Some(c) = char::from_u32(cp) else {
+                continue;
+            };
+            if is_soft_dotted(c) {
+                found.push(cp);
+            }
+        }
+        assert_eq!(found, SOFT_DOTTED);
+    }
+
+    #[test]
+    fn white_space_exhaustive() {
+        // Complete list of White_Space characters in Unicode 17.0.0.
+        // Source: https://www.unicode.org/Public/17.0.0/ucd/PropList.txt
+        #[rustfmt::skip]
+        const WHITE_SPACE: &[u32] = &[
+            0x0009, 0x000A, 0x000B, 0x000C, 0x000D, // <control-0009>..<control-000D>
+            0x0020,                     // SPACE
+            0x0085,                     // <control-0085>
+            0x00A0,                     // NO-BREAK SPACE
+            0x1680,                     // OGHAM SPACE MARK
+            0x2000, 0x2001, 0x2002, 0x2003, 0x2004, // EN QUAD..FOUR-PER-EM SPACE
+            0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A, // SIX-PER-EM SPACE..HAIR SPACE
+            0x2028,                     // LINE SEPARATOR
+            0x2029,                     // PARAGRAPH SEPARATOR
+            0x202F,                     // NARROW NO-BREAK SPACE
+            0x205F,                     // MEDIUM MATHEMATICAL SPACE
+            0x3000,                     // IDEOGRAPHIC SPACE
+        ];
+        let mut found = alloc::vec::Vec::new();
+        for cp in 0..=0x10_FFFFu32 {
+            let Some(c) = char::from_u32(cp) else {
+                continue;
+            };
+            if is_whitespace(c) {
+                found.push(cp);
+            }
+        }
+        assert_eq!(found, WHITE_SPACE);
     }
 
     // --- is_whitespace ---
@@ -346,6 +438,58 @@ mod tests {
     #[test]
     fn is_soft_dotted_dotless_j() {
         assert!(!is_soft_dotted('\u{0237}')); // ȷ is NOT Soft_Dotted
+    }
+
+    // --- is_assigned ---
+
+    #[test]
+    fn is_assigned_ascii() {
+        assert!(is_assigned('a'));
+        assert!(is_assigned('0'));
+        assert!(is_assigned(' '));
+    }
+
+    #[test]
+    fn is_assigned_cjk() {
+        assert!(is_assigned('日'));
+    }
+
+    #[test]
+    fn is_assigned_emoji() {
+        assert!(is_assigned('\u{1F600}')); // GRINNING FACE
+    }
+
+    #[test]
+    fn is_assigned_unassigned() {
+        assert!(!is_assigned('\u{0378}')); // unassigned in Greek block
+    }
+
+    #[test]
+    fn is_assigned_pua() {
+        // Private Use Area characters are assigned (General_Category=Private_Use).
+        assert!(is_assigned('\u{E000}'));
+    }
+
+    #[test]
+    fn is_assigned_noncharacter() {
+        // Noncharacters are permanently reserved and must not appear in interchange.
+        // They have General_Category=Cn (Unassigned) and we treat them as such.
+        assert!(!is_assigned('\u{FDD0}'));
+        assert!(!is_assigned('\u{FFFE}'));
+        assert!(!is_assigned('\u{10FFFF}'));
+    }
+
+    #[test]
+    fn is_assigned_unicode17_saudi_riyal() {
+        assert!(is_assigned('\u{20C1}')); // SAUDI RIYAL SIGN (Unicode 17.0.0)
+    }
+
+    #[test]
+    fn is_assigned_emoji_boundary() {
+        assert!(is_assigned('\u{1FA7C}')); // CRUTCH (Unicode 14.0)
+        assert!(!is_assigned('\u{1FA7D}')); // unassigned
+        assert!(is_assigned('\u{1FAEA}')); // DISTORTED FACE (Unicode 17.0.0)
+        assert!(!is_assigned('\u{1FAEB}')); // unassigned
     }
 
     // --- Non-standard characters (unassigned, PUA, noncharacters) ---

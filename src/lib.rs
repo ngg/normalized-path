@@ -93,9 +93,12 @@
 //!    or silently drop them.  Mapping to visible Control Pictures preserves the
 //!    information while making the name safe.  (Null bytes are excluded — see step 5.)
 //!
-//! 5. **Validation** -- rejects empty strings, `.`, `..`, names containing `/`, and
-//!    names containing null bytes (`\0`).  These are universally special on all OSes
-//!    and cannot be used as regular names.
+//! 5. **Validation** -- rejects empty strings, `.`, `..`, names containing `/`,
+//!    names containing null bytes (`\0`), and names containing unassigned Unicode
+//!    characters.  The first group is universally special on all OSes and cannot be
+//!    used as regular names.  Unassigned characters are rejected to ensure
+//!    normalization stability across Unicode versions (see
+//!    [Unicode stability policies](#unicode-stability-policies)).
 //!
 //! 6. **NFC composition** -- canonical composition to produce the shortest equivalent
 //!    form.
@@ -254,9 +257,24 @@
 //! # Unicode version
 //!
 //! All Unicode operations (NFC, NFD, case folding, property lookups) use
-//! **Unicode 17.0.0**. The Unicode version is considered part of the crate's
-//! stability contract: it will only be updated in a semver-breaking release to
-//! ensure that normalization results are consistent across all compatible versions.
+//! **Unicode 17.0.0**. Updating to a newer Unicode version is not considered a
+//! semver-breaking change as long as the normalization pipeline produces identical
+//! results for all strings consisting of characters assigned in the previous version.
+//! If a new Unicode version were to change normalization results for previously
+//! assigned characters, that update would be a semver-breaking change.
+//!
+//! This is unlikely — though not formally guaranteed — due to the following
+//! [Character Encoding Stability Policies](https://www.unicode.org/policies/stability_policy.html):
+//! - If a string contains only characters from a given version of Unicode, and it
+//!   is put into a normalized form in accordance with that version of Unicode, then
+//!   the results will be identical to the results of putting that string into a
+//!   normalized form in accordance with any subsequent version of Unicode.
+//! - Once a character is assigned, its canonical combining class will not change.
+//! - Once a character is encoded, its properties may still be changed, but not in
+//!   such a way as to change the fundamental identity of the character.
+//! - For each string S containing only assigned characters in a given Unicode
+//!   version, `toCasefold(toNFKC(S))` under that version is identical to
+//!   `toCasefold(toNFKC(S))` under any later version of Unicode.
 //!
 //! # `no_std` support
 //!
