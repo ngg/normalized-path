@@ -12,7 +12,7 @@ icu_properties = { version = ">=2.1.0, <2.3.0", default-features = false, featur
 
 [package]
 name = "normalized-path"
-version = "0.0.3"
+version = "0.0.4"
 description = "Opinionated cross-platform, optionally case-insensitive path normalization"
 repository = "https://github.com/ngg/normalized-path"
 documentation = "https://docs.rs/normalized-path"
