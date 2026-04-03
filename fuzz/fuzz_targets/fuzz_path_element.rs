@@ -48,8 +48,19 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     }
 
     // Construct via from_bytes — also exercises the UTF-8 rejection path.
-    let Ok(pe) = PathElement::from_bytes(data, cs) else {
-        return;
+    let pe = match PathElement::from_bytes(data, cs) {
+        Ok(pe) => pe,
+        Err(err) => {
+            #[cfg(target_vendor = "apple")]
+            assert_ne!(
+                *err.kind(),
+                normalized_path::ErrorKind::GetFileSystemRepresentationError,
+                "PathElement construction failed with GetFileSystemRepresentationError\n\
+                 data: {data:?}"
+            );
+            let _ = err;
+            return;
+        }
     };
     let input = pe.original();
     let normalized = pe.normalized();

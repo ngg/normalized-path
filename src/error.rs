@@ -3,8 +3,7 @@ use alloc::string::String;
 /// The kind of error that occurred during path element normalization or validation.
 ///
 /// See [`Error`] for the full error type, which also carries the original input string.
-#[derive(Debug)]
-#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorKind {
     /// The name is empty (or becomes empty after whitespace trimming).
     Empty,
@@ -27,6 +26,7 @@ pub enum ErrorKind {
     ContainsUnassignedChar,
 
     /// Apple's `CFStringGetFileSystemRepresentation` failed.
+    /// This should never occur in practice, since validation runs before this.
     #[cfg(target_vendor = "apple")]
     GetFileSystemRepresentationError,
 }
