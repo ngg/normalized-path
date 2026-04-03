@@ -2,7 +2,7 @@ use alloc::borrow::Cow;
 
 use crate::ErrorKind;
 use crate::error::ResultKind;
-use crate::unicode::{case_fold, is_above, is_starter, is_whitespace, nfc, nfd};
+use crate::unicode::{case_fold, is_above, is_soft_dotted, is_starter, is_whitespace, nfc, nfd};
 use crate::utils::cow;
 
 /// `White_Space` property check extended with Control Pictures (U+2409–U+240D) that
@@ -32,14 +32,15 @@ pub fn trim_whitespace_like(s: &str) -> &str {
 /// Post-case-fold fixup for locale-specific casing inconsistencies.
 /// Applied after `toCasefold()` in case-insensitive mode.
 ///
-/// - Maps Turkish İ (U+0130) and ı (U+0131) to ASCII I and i.
+/// - Maps Turkish ı (U+0131) to ASCII i.
 ///   `toCasefold()` treats ı as distinct from i, yet `toUppercase(ı)` = I
 ///   even without locale tailoring, creating collisions that folding alone misses.
-/// - Strips U+0307 COMBINING DOT ABOVE after I/i/J/j (with intervening
-///   combiners allowed as long as they are not starters or CCC=230 Above,
-///   matching the Unicode `After_I` condition). This handles NFD decomposition of İ
-///   (I + U+0307) and Lithuanian casing rules that add U+0307 after lowercase
-///   i and j to retain the visual dot when other diacritics are present.
+/// - Strips U+0307 COMBINING DOT ABOVE after any `Soft_Dotted` character
+///   (e.g. i, j, Cyrillic і/ј), blocked by intervening starters or CCC=230
+///   Above combiners (matching the Unicode `After_Soft_Dotted` condition).
+///   This handles the `i\u{0307}` output from `toCasefold(İ)` and Lithuanian
+///   casing rules: lowercase adds U+0307 after capital I/J/Į when more accents
+///   are above, and upper/titlecase removes U+0307 after soft-dotted characters.
 ///
 /// See <https://www.unicode.org/Public/17.0.0/ucd/SpecialCasing.txt>.
 #[must_use]
@@ -48,22 +49,17 @@ pub fn fixup_case_fold(s: &str) -> Cow<'_, str> {
         s.chars()
             .scan(false, |strip_dot_above, c| {
                 match c {
-                    '\u{0130}' => {
-                        // İ → I
-                        *strip_dot_above = true;
-                        Some(Some('I'))
-                    }
                     '\u{0131}' => {
                         // ı → i
                         *strip_dot_above = true;
                         Some(Some('i'))
                     }
-                    'I' | 'i' | 'J' | 'j' => {
+                    _ if is_soft_dotted(c) => {
                         *strip_dot_above = true;
                         Some(Some(c))
                     }
                     '\u{0307}' if *strip_dot_above => {
-                        // Strip combining dot above after I/i/J/j
+                        // Strip combining dot above after Soft_Dotted character
                         Some(None)
                     }
                     _ => {
@@ -335,11 +331,6 @@ mod tests {
     // --- fixup_case_fold ---
 
     #[test]
-    fn fixup_case_fold_dotted_capital() {
-        assert_eq!(fixup_case_fold("\u{0130}"), "I");
-    }
-
-    #[test]
     fn fixup_case_fold_dotless_lowercase() {
         assert_eq!(fixup_case_fold("\u{0131}"), "i");
     }
@@ -353,7 +344,7 @@ mod tests {
 
     #[test]
     fn fixup_case_fold_mixed() {
-        assert_eq!(fixup_case_fold("a\u{0130}b\u{0131}c"), "aIbic");
+        assert_eq!(fixup_case_fold("a\u{0131}b\u{0131}c"), "aibic");
     }
 
     #[test]
@@ -365,13 +356,7 @@ mod tests {
 
     #[test]
     fn fixup_case_fold_nfd_decomposed() {
-        let result = fixup_case_fold("I\u{0307}");
-        assert!(matches!(result, Cow::Borrowed(_)));
-        assert_eq!(result, "I");
-    }
-
-    #[test]
-    fn fixup_case_fold_nfd_decomposed_lowercase() {
+        // After case_fold, İ decomposes to i + U+0307. The dot is stripped.
         let result = fixup_case_fold("i\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "i");
@@ -379,13 +364,7 @@ mod tests {
 
     #[test]
     fn fixup_case_fold_intervening_combiner() {
-        let result = fixup_case_fold("I\u{0327}\u{0307}");
-        assert!(matches!(result, Cow::Borrowed(_)));
-        assert_eq!(result, "I\u{0327}");
-    }
-
-    #[test]
-    fn fixup_case_fold_intervening_combiner_lowercase() {
+        // U+0327 COMBINING CEDILLA has CCC=202 (not Above), so dot stripping proceeds.
         let result = fixup_case_fold("i\u{0327}\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "i\u{0327}");
@@ -393,9 +372,9 @@ mod tests {
 
     #[test]
     fn fixup_case_fold_multiple_dots() {
-        let result = fixup_case_fold("I\u{0307}\u{0307}");
+        let result = fixup_case_fold("i\u{0307}\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
-        assert_eq!(result, "I");
+        assert_eq!(result, "i");
     }
 
     #[test]
@@ -407,9 +386,9 @@ mod tests {
 
     #[test]
     fn fixup_case_fold_dot_after_starter_resets() {
-        let result = fixup_case_fold("Ia\u{0307}");
+        let result = fixup_case_fold("ia\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
-        assert_eq!(result, "Ia\u{0307}");
+        assert_eq!(result, "ia\u{0307}");
     }
 
     #[test]
@@ -422,15 +401,9 @@ mod tests {
     #[test]
     fn fixup_case_fold_above_combiner_blocks_strip() {
         // U+0301 COMBINING ACUTE ACCENT has CCC=230 (Above), which blocks dot stripping.
-        let result = fixup_case_fold("I\u{0301}\u{0307}");
+        let result = fixup_case_fold("i\u{0301}\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
-        assert_eq!(result, "I\u{0301}\u{0307}");
-    }
-
-    #[test]
-    fn fixup_case_fold_below_combiner_allows_strip() {
-        // U+0327 COMBINING CEDILLA has CCC=202 (not Above), so dot stripping proceeds.
-        assert_eq!(fixup_case_fold("I\u{0327}\u{0307}"), "I\u{0327}");
+        assert_eq!(result, "i\u{0301}\u{0307}");
     }
 
     // --- fixup_case_fold: Lithuanian J dot stripping ---
@@ -439,11 +412,6 @@ mod tests {
     fn fixup_case_fold_j_dot_above_stripped() {
         // Lithuanian lowercase adds U+0307 after j.
         assert_eq!(fixup_case_fold("j\u{0307}"), "j");
-    }
-
-    #[test]
-    fn fixup_case_fold_j_uppercase_dot_above_stripped() {
-        assert_eq!(fixup_case_fold("J\u{0307}"), "J");
     }
 
     #[test]
@@ -460,6 +428,26 @@ mod tests {
         let result = fixup_case_fold("j\u{0302}");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "j\u{0302}");
+    }
+
+    // --- fixup_case_fold: Soft_Dotted characters ---
+
+    #[test]
+    fn fixup_case_fold_cyrillic_i_dot_stripped() {
+        // Cyrillic і (U+0456) has the Soft_Dotted property.
+        assert_eq!(fixup_case_fold("\u{0456}\u{0307}"), "\u{0456}");
+    }
+
+    #[test]
+    fn fixup_case_fold_cyrillic_je_dot_stripped() {
+        // Cyrillic ј (U+0458) has the Soft_Dotted property.
+        assert_eq!(fixup_case_fold("\u{0458}\u{0307}"), "\u{0458}");
+    }
+
+    #[test]
+    fn fixup_case_fold_i_ogonek_dot_stripped() {
+        // Latin į (U+012F) has the Soft_Dotted property.
+        assert_eq!(fixup_case_fold("\u{012F}\u{0307}"), "\u{012F}");
     }
 
     // --- normalize ---
@@ -760,6 +748,36 @@ mod tests {
 
         // "ı\u{0307}" stays as-is in NFC. CI must map to "i".
         assert_eq!(normalize_ci_from_normalized_cs("\u{0131}\u{0307}"), "i");
+    }
+
+    #[test]
+    fn ci_from_cs_soft_dotted_dot_stripped() {
+        // Cyrillic і (U+0456) is Soft_Dotted: dot above is stripped.
+        assert_eq!(
+            normalize_ci_from_normalized_cs("\u{0456}\u{0307}"),
+            "\u{0456}"
+        );
+        // Cyrillic ј (U+0458) is Soft_Dotted: dot above is stripped.
+        assert_eq!(
+            normalize_ci_from_normalized_cs("\u{0458}\u{0307}"),
+            "\u{0458}"
+        );
+        // Latin į (U+012F) is Soft_Dotted: dot above is stripped.
+        assert_eq!(
+            normalize_ci_from_normalized_cs("\u{012F}\u{0307}"),
+            "\u{012F}"
+        );
+        // Greek yot (U+03F3) is Soft_Dotted: dot above is stripped.
+        assert_eq!(
+            normalize_ci_from_normalized_cs("\u{03F3}\u{0307}"),
+            "\u{03F3}"
+        );
+    }
+
+    #[test]
+    fn ci_from_cs_non_soft_dotted_dot_preserved() {
+        // e is NOT Soft_Dotted: dot above is preserved (and NFC-composes to ė).
+        assert_eq!(normalize_ci_from_normalized_cs("e\u{0307}"), "\u{0117}");
     }
 
     #[test]

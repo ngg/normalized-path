@@ -43,7 +43,8 @@
 //! - Windows 8.3 short file names (e.g. `PROGRA~1`) are not handled.
 //! - Visually similar names are not necessarily considered equal.  For example,
 //!   a regular space (U+0020) and a non-breaking space (U+00A0) produce different
-//!   normalized forms despite looking identical.
+//!   normalized forms despite looking identical, and the ligature `ﬁ` (U+FB01) is
+//!   distinct from the two-character sequence `fi`.
 //! - Fullwidth and ASCII variants of the same character (e.g. `Ａ` vs `A`) are
 //!   deliberately normalized to the same form.  Users who need to distinguish
 //!   them cannot use this crate.
@@ -108,17 +109,18 @@
 //!
 //! 8. **Unicode `toCasefold()`** -- locale-independent full case folding.
 //!
-//! 9. **Post-case-fold fixup** -- maps U+0130 (İ) and U+0131 (ı) to ASCII I and i
-//!    respectively, and strips U+0307 COMBINING DOT ABOVE after I/i/J/j
-//!    (blocked by intervening starters or CCC=230 Above combiners, matching the
-//!    Unicode `After_I` condition).  This neutralizes two
-//!    locale-specific casing inconsistencies that `toCasefold()` alone misses:
+//! 9. **Post-case-fold fixup** -- maps U+0131 (ı) to ASCII i, and strips
+//!    U+0307 COMBINING DOT ABOVE after any `Soft_Dotted`
+//!    character (e.g. i, j, Cyrillic і/ј), blocked by intervening starters or
+//!    CCC=230 Above combiners (matching the Unicode `After_Soft_Dotted` condition).
+//!    This neutralizes two locale-specific casing inconsistencies that
+//!    `toCasefold()` alone misses:
 //!    - **Turkish/Azerbaijani:** `toCasefold()` treats ı as distinct from i
 //!      (ı folds to itself), yet `toUppercase(ı)` = I even without locale
 //!      tailoring, and I folds back to i -- creating a collision.
-//!    - **Lithuanian:** casing rules add U+0307 after lowercase i and j to
-//!      retain the visual dot when other diacritics are present; stripping it
-//!      ensures stability under Lithuanian casing.
+//!    - **Lithuanian:** lowercase adds U+0307 after capital I/J/Į when more
+//!      accents are above, and upper/titlecase removes U+0307 after soft-dotted
+//!      characters; stripping it ensures stability under Lithuanian casing.
 //!
 //! 10. **NFC composition** (final) -- recompose after case folding to produce the
 //!     canonical NFC output.

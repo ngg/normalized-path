@@ -2,7 +2,7 @@ use alloc::borrow::Cow;
 
 use icu_casemap::CaseMapper;
 use icu_normalizer::{ComposingNormalizer, DecomposingNormalizer};
-use icu_properties::props::{CanonicalCombiningClass, WhiteSpace};
+use icu_properties::props::{CanonicalCombiningClass, SoftDotted, WhiteSpace};
 use icu_properties::{CodePointMapData, CodePointSetData};
 
 /// NFD normalization (canonical decomposition).
@@ -42,6 +42,12 @@ pub fn is_above(c: char) -> bool {
     CodePointMapData::<CanonicalCombiningClass>::new().get(c) == CanonicalCombiningClass::Above
 }
 
+/// Whether `c` has the Unicode `Soft_Dotted` property (e.g. i, j, Cyrillic і, ј).
+#[must_use]
+pub fn is_soft_dotted(c: char) -> bool {
+    CodePointSetData::new::<SoftDotted>().contains(c)
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::borrow::Cow;
@@ -49,7 +55,7 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{case_fold, is_starter, is_whitespace, nfc, nfd};
+    use super::{case_fold, is_above, is_soft_dotted, is_starter, is_whitespace, nfc, nfd};
 
     // --- nfd / nfc ---
 
@@ -214,6 +220,90 @@ mod tests {
     #[test]
     fn is_starter_cjk() {
         assert!(is_starter('日'));
+    }
+
+    // --- is_above ---
+
+    #[test]
+    fn is_above_combining_acute() {
+        assert!(is_above('\u{0301}')); // CCC=230
+    }
+
+    #[test]
+    fn is_above_combining_dot_above() {
+        assert!(is_above('\u{0307}')); // CCC=230
+    }
+
+    #[test]
+    fn is_above_combining_cedilla() {
+        assert!(!is_above('\u{0327}')); // CCC=202
+    }
+
+    #[test]
+    fn is_above_ascii_letter() {
+        assert!(!is_above('a')); // CCC=0
+    }
+
+    // --- is_soft_dotted ---
+
+    #[test]
+    fn is_soft_dotted_latin_i() {
+        assert!(is_soft_dotted('i'));
+    }
+
+    #[test]
+    fn is_soft_dotted_latin_j() {
+        assert!(is_soft_dotted('j'));
+    }
+
+    #[test]
+    fn is_soft_dotted_cyrillic_i() {
+        assert!(is_soft_dotted('\u{0456}')); // CYRILLIC SMALL LETTER BYELORUSSIAN-UKRAINIAN I
+    }
+
+    #[test]
+    fn is_soft_dotted_cyrillic_je() {
+        assert!(is_soft_dotted('\u{0458}')); // CYRILLIC SMALL LETTER JE
+    }
+
+    #[test]
+    fn is_soft_dotted_latin_i_ogonek() {
+        assert!(is_soft_dotted('\u{012F}')); // LATIN SMALL LETTER I WITH OGONEK
+    }
+
+    #[test]
+    fn is_soft_dotted_uppercase_i() {
+        assert!(!is_soft_dotted('I'));
+    }
+
+    #[test]
+    fn is_soft_dotted_uppercase_j() {
+        assert!(!is_soft_dotted('J'));
+    }
+
+    #[test]
+    fn is_soft_dotted_math_sans_bold_i() {
+        assert!(is_soft_dotted('\u{1D5F6}')); // MATHEMATICAL SANS-SERIF BOLD SMALL I
+    }
+
+    #[test]
+    fn is_soft_dotted_greek_yot() {
+        assert!(is_soft_dotted('\u{03F3}')); // GREEK LETTER YOT
+    }
+
+    #[test]
+    fn is_soft_dotted_latin_i_stroke() {
+        assert!(is_soft_dotted('\u{0268}')); // LATIN SMALL LETTER I WITH STROKE
+    }
+
+    #[test]
+    fn is_soft_dotted_dotless_i() {
+        assert!(!is_soft_dotted('\u{0131}')); // ı is NOT Soft_Dotted
+    }
+
+    #[test]
+    fn is_soft_dotted_dotless_j() {
+        assert!(!is_soft_dotted('\u{0237}')); // ȷ is NOT Soft_Dotted
     }
 
     // --- Non-standard characters (unassigned, PUA, noncharacters) ---
