@@ -29,18 +29,27 @@ pub fn trim_whitespace_like(s: &str) -> &str {
     s.trim_matches(is_whitespace_like)
 }
 
-/// Post-case-fold fixup for locale-specific casing inconsistencies.
+/// Post-case-fold fixup for casing inconsistencies.
 /// Applied after `toCasefold()` in case-insensitive mode.
 ///
-/// - Maps Turkish ı (U+0131) to ASCII i.
+/// - Maps dotless ı (U+0131) to ASCII i.
 ///   `toCasefold()` treats ı as distinct from i, yet `toUppercase(ı)` = I
 ///   even without locale tailoring, creating collisions that folding alone misses.
 /// - Strips U+0307 COMBINING DOT ABOVE after any `Soft_Dotted` character
 ///   (e.g. i, j, Cyrillic і/ј), blocked by intervening starters or CCC=230
 ///   Above combiners (matching the Unicode `After_Soft_Dotted` condition).
 ///   This handles the `i\u{0307}` output from `toCasefold(İ)` and Lithuanian
-///   casing rules: lowercase adds U+0307 after capital I/J/Į when more accents
-///   are above, and upper/titlecase removes U+0307 after soft-dotted characters.
+///   casing rules: lowercase adds U+0307 after I/J/Į when more accents are above
+///   (e.g. `lt_lowercase("J\u{0301}")` = `j\u{0307}\u{0301}`), and upper/titlecase
+///   removes U+0307 after soft-dotted characters
+///   (e.g. `lt_uppercase("j\u{0307}")` = `J`).
+///
+/// Note: this function relies on the invariant that `toCasefold()` preserves
+/// the `Soft_Dotted` property — every `Soft_Dotted` character either folds to
+/// itself or to another `Soft_Dotted` character. The reverse is not true: some
+/// non-`Soft_Dotted` characters fold to `Soft_Dotted` ones (e.g. I → i), but
+/// that is harmless since it only adds extra dot stripping, not skips it.
+/// This invariant is verified by a test in `unicode.rs`.
 ///
 /// See <https://www.unicode.org/Public/17.0.0/ucd/SpecialCasing.txt>.
 #[must_use]
@@ -48,19 +57,19 @@ pub fn fixup_case_fold(s: &str) -> Cow<'_, str> {
     cow(
         s.chars()
             .scan(false, |strip_dot_above, c| {
-                match c {
+                Some(match c {
                     '\u{0131}' => {
-                        // ı → i
+                        // ı → i (i is Soft_Dotted)
                         *strip_dot_above = true;
-                        Some(Some('i'))
+                        Some('i')
                     }
                     _ if is_soft_dotted(c) => {
                         *strip_dot_above = true;
-                        Some(Some(c))
+                        Some(c)
                     }
                     '\u{0307}' if *strip_dot_above => {
                         // Strip combining dot above after Soft_Dotted character
-                        Some(None)
+                        None
                     }
                     _ => {
                         // Reset on starters (CCC=0) or CCC=230 (Above), matching
@@ -69,9 +78,9 @@ pub fn fixup_case_fold(s: &str) -> Cow<'_, str> {
                         if is_starter(c) || is_above(c) {
                             *strip_dot_above = false;
                         }
-                        Some(Some(c))
+                        Some(c)
                     }
-                }
+                })
             })
             .flatten(),
         s,
@@ -416,11 +425,8 @@ mod tests {
 
     #[test]
     fn fixup_case_fold_j_dot_with_circumflex() {
-        // Lithuanian lowercase of Ĵ with ypogegrammeni: j + dot + circumflex + ypogegrammeni
-        assert_eq!(
-            fixup_case_fold("j\u{0307}\u{0302}\u{0345}"),
-            "j\u{0302}\u{0345}"
-        );
+        // Lithuanian lowercase of Ĵ + accent: j + dot + circumflex → dot stripped
+        assert_eq!(fixup_case_fold("j\u{0307}\u{0302}"), "j\u{0302}");
     }
 
     #[test]

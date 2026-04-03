@@ -143,6 +143,48 @@ mod tests {
         assert_eq!(case_fold("\u{03C2}"), "\u{03C3}");
     }
 
+    #[test]
+    fn case_fold_ipa_caseless() {
+        // IPA characters are caseless — toCasefold() leaves them unchanged.
+        let result = case_fold("\u{0250}\u{026A}\u{0283}"); // ɐ ɪ ʃ
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn case_fold_cherokee_folds_to_uppercase() {
+        // Cherokee lowercase was added after uppercase, so toCasefold() maps
+        // lowercase to uppercase for cross-version stability.
+        assert_eq!(case_fold("\u{AB70}"), "\u{13A0}"); // ꭰ → Ꭰ
+        assert_eq!(case_fold("\u{13A0}"), "\u{13A0}"); // Ꭰ → Ꭰ (unchanged)
+    }
+
+    #[test]
+    fn case_fold_preserves_soft_dotted() {
+        // Every Soft_Dotted character must fold to itself or to another
+        // Soft_Dotted character. fixup_case_fold relies on this invariant.
+        for cp in 0..=0x10_FFFFu32 {
+            let Some(c) = char::from_u32(cp) else {
+                continue;
+            };
+            if !is_soft_dotted(c) {
+                continue;
+            }
+            let s = alloc::string::String::from(c);
+            let folded = case_fold(&s);
+            let folded_chars: alloc::vec::Vec<char> = folded.chars().collect();
+            assert_eq!(
+                folded_chars.len(),
+                1,
+                "Soft_Dotted U+{cp:04X} folds to multiple characters: {folded:?}"
+            );
+            assert!(
+                is_soft_dotted(folded_chars[0]),
+                "Soft_Dotted U+{cp:04X} folds to U+{:04X} which is not Soft_Dotted",
+                folded_chars[0] as u32
+            );
+        }
+    }
+
     // --- is_whitespace ---
 
     #[test]

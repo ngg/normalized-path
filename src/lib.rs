@@ -26,7 +26,8 @@
 //!   truncation at null bytes), normalizing the transformed name produces the
 //!   same result as normalizing the original.
 //! - In case-insensitive mode, names differing only in case normalize identically,
-//!   with correct handling of edge cases like Turkish dotted/dotless I.
+//!   including edge cases from Turkish/Azerbaijani and Lithuanian casing rules
+//!   (see step 9 below).
 //!
 //! **Non-goals:**
 //!
@@ -113,14 +114,16 @@
 //!    U+0307 COMBINING DOT ABOVE after any `Soft_Dotted`
 //!    character (e.g. i, j, Cyrillic і/ј), blocked by intervening starters or
 //!    CCC=230 Above combiners (matching the Unicode `After_Soft_Dotted` condition).
-//!    This neutralizes two locale-specific casing inconsistencies that
-//!    `toCasefold()` alone misses:
-//!    - **Turkish/Azerbaijani:** `toCasefold()` treats ı as distinct from i
+//!    This neutralizes casing inconsistencies that `toCasefold()` alone misses:
+//!    - **Dotless ı (U+0131):** `toCasefold()` treats ı as distinct from i
 //!      (ı folds to itself), yet `toUppercase(ı)` = I even without locale
 //!      tailoring, and I folds back to i -- creating a collision.
-//!    - **Lithuanian:** lowercase adds U+0307 after capital I/J/Į when more
-//!      accents are above, and upper/titlecase removes U+0307 after soft-dotted
-//!      characters; stripping it ensures stability under Lithuanian casing.
+//!    - **Lithuanian casing rules:** when lowercasing I/J/Į with additional accents above,
+//!      Lithuanian rules insert U+0307 to retain the visual dot (e.g.
+//!      `lt_lowercase("J\u{0301}")` = `j\u{0307}\u{0301}`).  Conversely,
+//!      Lithuanian upper/titlecase removes U+0307 after soft-dotted characters
+//!      (e.g. `lt_uppercase("j\u{0307}")` = `J`).  Stripping U+0307 after
+//!      soft-dotted characters ensures stability under both directions.
 //!
 //! 10. **NFC composition** (final) -- recompose after case folding to produce the
 //!     canonical NFC output.
