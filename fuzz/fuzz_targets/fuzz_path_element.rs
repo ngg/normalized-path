@@ -227,38 +227,31 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
         check("case_fold", &case_fold(case_input));
 
         let cm = CaseMapper::new();
-        check(
-            "icu_lowercase",
-            &cm.lowercase_to_string(case_input, &langid!("und")),
-        );
-        check(
-            "icu_uppercase",
-            &cm.uppercase_to_string(case_input, &langid!("und")),
-        );
-        check(
-            "icu_titlecase",
-            &cm.titlecase_segment_with_only_case_data_to_string(
-                case_input,
-                &langid!("und"),
-                Default::default(),
-            ),
-        );
-        check(
-            "icu_lowercase_tr",
-            &cm.lowercase_to_string(case_input, &langid!("tr")),
-        );
-        check(
-            "icu_uppercase_tr",
-            &cm.uppercase_to_string(case_input, &langid!("tr")),
-        );
-        check(
-            "icu_titlecase_tr",
-            &cm.titlecase_segment_with_only_case_data_to_string(
-                case_input,
-                &langid!("tr"),
-                Default::default(),
-            ),
-        );
+        let check_locale = |langid: &icu_locale_core::LanguageIdentifier| {
+            let tag = langid.to_string();
+            check(
+                &format!("icu_lowercase_{tag}"),
+                &cm.lowercase_to_string(case_input, langid),
+            );
+            check(
+                &format!("icu_uppercase_{tag}"),
+                &cm.uppercase_to_string(case_input, langid),
+            );
+            check(
+                &format!("icu_titlecase_{tag}"),
+                &cm.titlecase_segment_with_only_case_data_to_string(
+                    case_input,
+                    langid,
+                    Default::default(),
+                ),
+            );
+        };
+        check_locale(&langid!("und"));
+        // Languages with special casing rules defined in Unicode:
+        // https://www.unicode.org/Public/17.0.0/ucd/SpecialCasing.txt
+        check_locale(&langid!("tr"));
+        check_locale(&langid!("az"));
+        check_locale(&langid!("lt"));
         check("fold_turkic", &cm.fold_turkic_string(case_input));
     }
 
