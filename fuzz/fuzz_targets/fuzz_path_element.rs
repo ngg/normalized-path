@@ -52,7 +52,7 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
         Err(err) => {
             #[cfg(target_vendor = "apple")]
             assert_ne!(
-                *err.kind(),
+                err.kind(),
                 normalized_path::ErrorKind::GetFileSystemRepresentationError,
                 "PathElement construction failed with GetFileSystemRepresentationError\n\
                  data: {data:?}"
