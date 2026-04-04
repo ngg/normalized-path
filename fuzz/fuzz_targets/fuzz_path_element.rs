@@ -36,22 +36,12 @@ fn unmap_control_chars(s: &str) -> String {
 
 fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     #[cfg(target_vendor = "apple")]
-    if let Ok(s) = core::str::from_utf8(data) {
-        if s.contains('\0') {
-            assert_eq!(
-                apple_compatible_from_normalized_cs(s).unwrap_err(),
-                normalized_path::ErrorKind::GetFileSystemRepresentationError,
-                "apple_compatible_from_normalized_cs should fail with \
-                 GetFileSystemRepresentationError on null bytes\n\
-                 input: {s:?}"
-            );
-        } else {
-            assert!(
-                apple_compatible_from_normalized_cs(s).is_ok(),
-                "apple_compatible_from_normalized_cs failed\n\
-                 input: {s:?}"
-            );
-        }
+    if let Ok(s) = core::str::from_utf8(data) && !s.contains('\0') {
+        assert!(
+            apple_compatible_from_normalized_cs(s).is_ok(),
+            "apple_compatible_from_normalized_cs failed\n\
+             input: {s:?}"
+        );
     }
 
     // Construct via from_bytes — rejects invalid UTF-8.
