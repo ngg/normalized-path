@@ -1039,10 +1039,7 @@ mod tests {
 
     #[test]
     fn new_rejects_empty() {
-        assert_eq!(
-            PathElementCS::new("").unwrap_err().kind(),
-            ErrorKind::Empty
-        );
+        assert_eq!(PathElementCS::new("").unwrap_err().kind(), ErrorKind::Empty);
     }
 
     #[test]
