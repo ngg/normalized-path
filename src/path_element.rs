@@ -753,6 +753,7 @@ impl<'a> TryFrom<PathElement<'a>> for PathElementCI<'a> {
 mod tests {
     use alloc::borrow::Cow;
     use alloc::string::ToString;
+    use alloc::vec;
     use alloc::vec::Vec;
 
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
