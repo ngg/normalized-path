@@ -52,6 +52,7 @@
 //! - In case-insensitive mode, Turkish İ (U+0130), dotless ı (U+0131), and
 //!   ASCII I/i are all deliberately normalized to the same form.  Users who
 //!   need to distinguish them cannot use case-insensitive mode.
+//! - Invalid UTF-8 byte sequences in `from_bytes`/`from_os_str` are rejected.
 //! - Names containing unassigned Unicode code points are rejected.  This makes it
 //!   much more likely that normalization results for accepted names remain stable
 //!   when upgrading to a future Unicode version (see [Unicode version](#unicode-version)).
@@ -66,11 +67,9 @@
 //!
 //! Every path element name goes through the following steps during construction:
 //!
-//! 0. **Byte decoding** (only for `from_bytes`/`from_os_str`) --
-//!    [`String::from_utf8_lossy()`] is applied, replacing invalid byte sequences
-//!    with U+FFFD.  Invalid bytes can be encountered on Unix filesystems, which
-//!    allow arbitrary bytes except `/` and `\0` in names, and on Windows, where
-//!    filenames are WTF-16 and may contain unpaired surrogates.
+//! 0. **UTF-8 validation** (only for `from_bytes`/`from_os_str`) --
+//!    the input must be valid UTF-8; invalid byte sequences are rejected with
+//!    [`ErrorKind::InvalidUtf8`].
 //!
 //! 1. **NFD decomposition** -- canonical decomposition to reorder combining marks.
 //!    This is needed because macOS stores filenames in a form close to NFD, so an

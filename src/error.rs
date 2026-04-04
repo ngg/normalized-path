@@ -21,6 +21,9 @@ pub enum ErrorKind {
     /// terminator, silently truncating the name.
     ContainsNullByte,
 
+    /// The byte input is not valid UTF-8.
+    InvalidUtf8,
+
     /// The name contains a Unicode code point that is not assigned in the
     /// version of Unicode used by this crate.
     ContainsUnassignedChar,
@@ -49,6 +52,7 @@ impl core::fmt::Display for ErrorKind {
             Self::ParentDirectoryMarker => f.write_str("parent directory marker"),
             Self::ContainsForwardSlash => f.write_str("contains forward slash"),
             Self::ContainsNullByte => f.write_str("contains null byte"),
+            Self::InvalidUtf8 => f.write_str("invalid UTF-8"),
             Self::ContainsUnassignedChar => f.write_str("contains unassigned character"),
             #[cfg(target_vendor = "apple")]
             Self::GetFileSystemRepresentationError => {
@@ -147,6 +151,7 @@ mod tests {
             ErrorKind::ContainsNullByte.to_string(),
             "contains null byte"
         );
+        assert_eq!(ErrorKind::InvalidUtf8.to_string(), "invalid UTF-8");
         assert_eq!(
             ErrorKind::ContainsUnassignedChar.to_string(),
             "contains unassigned character"

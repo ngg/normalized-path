@@ -36,18 +36,25 @@ fn unmap_control_chars(s: &str) -> String {
 
 fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     #[cfg(target_vendor = "apple")]
-    {
-        let decoded = String::from_utf8_lossy(data);
-        if !decoded.contains('\0') {
+    if let Ok(s) = core::str::from_utf8(data) {
+        if s.contains('\0') {
+            assert_eq!(
+                apple_compatible_from_normalized_cs(s).unwrap_err(),
+                normalized_path::ErrorKind::GetFileSystemRepresentationError,
+                "apple_compatible_from_normalized_cs should fail with \
+                 GetFileSystemRepresentationError on null bytes\n\
+                 input: {s:?}"
+            );
+        } else {
             assert!(
-                apple_compatible_from_normalized_cs(&decoded).is_ok(),
+                apple_compatible_from_normalized_cs(s).is_ok(),
                 "apple_compatible_from_normalized_cs failed\n\
-                 decoded: {decoded:?}"
+                 input: {s:?}"
             );
         }
     }
 
-    // Construct via from_bytes — also exercises the UTF-8 rejection path.
+    // Construct via from_bytes — rejects invalid UTF-8.
     let pe = match PathElement::from_bytes(data, cs) {
         Ok(pe) => pe,
         Err(err) => {
@@ -64,50 +71,28 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     };
     let input = pe.original();
     let normalized = pe.normalized();
+
+    // If from_bytes succeeded, the data must be valid UTF-8.
+    let s = core::str::from_utf8(data).expect("from_bytes succeeded on invalid UTF-8");
+    assert_eq!(
+        input, s,
+        "from_bytes original differs from raw UTF-8 input\n data: {data:?}"
+    );
+
     validate_path_element(input).expect("validate_path_element must accept original");
     validate_path_element(normalized).expect("validate_path_element must accept normalized output");
     validate_path_element(pe.os_compatible())
         .expect("validate_path_element must accept os_compatible output");
 
-    // from_utf8_lossy of the raw data must produce the same original.
-    let decoded = String::from_utf8_lossy(data);
+    // from_bytes and new must produce the same original.
+    let pe_str =
+        PathElement::new(s, cs).expect("PathElement::new failed on input that from_bytes accepted");
     assert_eq!(
-        input, &*decoded,
-        "from_bytes original does not match from_utf8_lossy\n\
-         data:    {data:?}\n\
-         original: {input:?}\n\
-         decoded:  {decoded:?}"
+        input,
+        pe_str.original(),
+        "new original differs from input\n\
+         input: {input:?}"
     );
-
-    // Constructing from the decoded string must produce the same normalized form.
-    let pe_decoded = PathElement::new(&*decoded, cs)
-        .expect("assertion error: PathElement::new failed on from_utf8_lossy output");
-    assert_eq!(
-        normalized,
-        pe_decoded.normalized(),
-        "normalize mismatch between from_bytes and new(from_utf8_lossy(data))\n\
-         data:    {data:?}\n\
-         from_bytes normalized: {normalized:?}\n\
-         new normalized:        {:?}",
-        pe_decoded.normalized()
-    );
-
-    // If the data is valid UTF-8, from_bytes and new must agree exactly.
-    if let Ok(s) = core::str::from_utf8(data) {
-        assert_eq!(
-            input, s,
-            "from_bytes original differs from raw UTF-8 input\n\
-             data: {data:?}"
-        );
-        let pe_str = PathElement::new(s, cs)
-            .expect("assertion error: PathElement::new failed on valid UTF-8 input");
-        assert_eq!(
-            normalized,
-            pe_str.normalized(),
-            "normalize mismatch between from_bytes and new on valid UTF-8\n\
-             data: {data:?}"
-        );
-    }
 
     // is_normalized and is_os_compatible must agree with value comparison.
     assert_eq!(

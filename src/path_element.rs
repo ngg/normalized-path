@@ -5,6 +5,7 @@ use std::ffi::{OsStr, OsString};
 
 use crate::Result;
 use crate::case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
+use crate::error::ErrorKind;
 use crate::normalize::{normalize_ci_from_normalized_cs, normalize_cs};
 use crate::os::os_compatible_from_normalized_cs;
 use crate::utils::SubstringOrOwned;
@@ -164,7 +165,7 @@ impl<'a> PathElementCS<'a> {
     ///
     /// # Errors
     /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
-    /// or contains `/`).
+    /// contains `/`, `\0`, or unassigned Unicode characters).
     ///
     /// ```
     /// # use normalized_path::PathElementCS;
@@ -178,21 +179,18 @@ impl<'a> PathElementCS<'a> {
 
     /// Creates a new case-sensitive path element from a byte slice.
     ///
-    /// Invalid UTF-8 is accepted; see
-    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
-    ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
-    /// or contains `/`).
+    /// Returns [`Error`](crate::Error) if the input is not valid UTF-8 or the
+    /// name is invalid (empty, `.`, `..`, contains `/`, `\0`, or unassigned
+    /// Unicode characters).
     ///
     /// ```
     /// # use normalized_path::PathElementCS;
     /// let pe = PathElementCS::from_bytes(b"hello.txt")?;
     /// assert_eq!(pe.normalized(), "hello.txt");
     ///
-    /// // Invalid UTF-8 is replaced with U+FFFD
-    /// let pe = PathElementCS::from_bytes(b"hello\xff.txt")?;
-    /// assert_eq!(pe.normalized(), "hello\u{FFFD}.txt");
+    /// // Invalid UTF-8 is rejected
+    /// assert!(PathElementCS::from_bytes(b"hello\xff.txt").is_err());
     /// # Ok::<(), normalized_path::Error>(())
     /// ```
     pub fn from_bytes(original: impl Into<Cow<'a, [u8]>>) -> Result<Self> {
@@ -201,12 +199,10 @@ impl<'a> PathElementCS<'a> {
 
     /// Creates a new case-sensitive path element from an OS string.
     ///
-    /// Invalid UTF-8 is accepted; see
-    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
-    ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
-    /// or contains `/`).
+    /// Returns [`Error`](crate::Error) if the input is not valid UTF-8 or the
+    /// name is invalid (empty, `.`, `..`, contains `/`, `\0`, or unassigned
+    /// Unicode characters).
     ///
     /// ```
     /// # use normalized_path::PathElementCS;
@@ -226,7 +222,7 @@ impl<'a> PathElementCI<'a> {
     ///
     /// # Errors
     /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
-    /// or contains `/`).
+    /// contains `/`, `\0`, or unassigned Unicode characters).
     ///
     /// ```
     /// # use normalized_path::PathElementCI;
@@ -240,12 +236,10 @@ impl<'a> PathElementCI<'a> {
 
     /// Creates a new case-insensitive path element from a byte slice.
     ///
-    /// Invalid UTF-8 is accepted; see
-    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
-    ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
-    /// or contains `/`).
+    /// Returns [`Error`](crate::Error) if the input is not valid UTF-8 or the
+    /// name is invalid (empty, `.`, `..`, contains `/`, `\0`, or unassigned
+    /// Unicode characters).
     ///
     /// ```
     /// # use normalized_path::PathElementCI;
@@ -259,12 +253,10 @@ impl<'a> PathElementCI<'a> {
 
     /// Creates a new case-insensitive path element from an OS string.
     ///
-    /// Invalid UTF-8 is accepted; see
-    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
-    ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
-    /// or contains `/`).
+    /// Returns [`Error`](crate::Error) if the input is not valid UTF-8 or the
+    /// name is invalid (empty, `.`, `..`, contains `/`, `\0`, or unassigned
+    /// Unicode characters).
     #[cfg(feature = "std")]
     pub fn from_os_str(original: impl Into<Cow<'a, OsStr>>) -> Result<Self> {
         Self::from_os_str_with_case_sensitivity(original, CaseInsensitive)
@@ -275,7 +267,8 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
     /// Creates a new path element with runtime-selected case sensitivity.
     ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
+    /// contains `/`, `\0`, or unassigned Unicode characters).
     ///
     /// ```
     /// # use normalized_path::{PathElement, CaseSensitivity};
@@ -295,12 +288,10 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Creates a new path element from a byte slice with runtime-selected case sensitivity.
     ///
-    /// Invalid UTF-8 is accepted; see
-    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
-    ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
-    /// or contains `/`).
+    /// Returns [`Error`](crate::Error) if the input is not valid UTF-8 or the
+    /// name is invalid (empty, `.`, `..`, contains `/`, `\0`, or unassigned
+    /// Unicode characters).
     pub fn from_bytes(
         original: impl Into<Cow<'a, [u8]>>,
         case_sensitivity: impl Into<CaseSensitivity>,
@@ -310,12 +301,10 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Creates a new path element from an OS string with runtime-selected case sensitivity.
     ///
-    /// Invalid UTF-8 is accepted; see
-    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
-    ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
-    /// or contains `/`).
+    /// Returns [`Error`](crate::Error) if the input is not valid UTF-8 or the
+    /// name is invalid (empty, `.`, `..`, contains `/`, `\0`, or unassigned
+    /// Unicode characters).
     #[cfg(feature = "std")]
     pub fn from_os_str(
         original: impl Into<Cow<'a, OsStr>>,
@@ -327,7 +316,8 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
     /// Convenience constructor for a case-sensitive `PathElement`.
     ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
+    /// contains `/`, `\0`, or unassigned Unicode characters).
     pub fn new_cs(original: impl Into<Cow<'a, str>>) -> Result<Self> {
         Self::with_case_sensitivity(original, CaseSensitive)
     }
@@ -335,40 +325,38 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
     /// Convenience constructor for a case-insensitive `PathElement`.
     ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
+    /// contains `/`, `\0`, or unassigned Unicode characters).
     pub fn new_ci(original: impl Into<Cow<'a, str>>) -> Result<Self> {
         Self::with_case_sensitivity(original, CaseInsensitive)
     }
 
     /// Convenience constructor for a case-sensitive `PathElement` from bytes.
     ///
-    /// Invalid UTF-8 is accepted; see
-    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
-    ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the input is not valid UTF-8 or the
+    /// name is invalid (empty, `.`, `..`, contains `/`, `\0`, or unassigned
+    /// Unicode characters).
     pub fn from_bytes_cs(original: impl Into<Cow<'a, [u8]>>) -> Result<Self> {
         Self::from_bytes_with_case_sensitivity(original, CaseSensitive)
     }
 
     /// Convenience constructor for a case-insensitive `PathElement` from bytes.
     ///
-    /// Invalid UTF-8 is accepted; see
-    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
-    ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the input is not valid UTF-8 or the
+    /// name is invalid (empty, `.`, `..`, contains `/`, `\0`, or unassigned
+    /// Unicode characters).
     pub fn from_bytes_ci(original: impl Into<Cow<'a, [u8]>>) -> Result<Self> {
         Self::from_bytes_with_case_sensitivity(original, CaseInsensitive)
     }
 
     /// Convenience constructor for a case-sensitive `PathElement` from an OS string.
     ///
-    /// Invalid UTF-8 is accepted; see
-    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
-    ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the input is not valid UTF-8 or the
+    /// name is invalid (empty, `.`, `..`, contains `/`, `\0`, or unassigned
+    /// Unicode characters).
     #[cfg(feature = "std")]
     pub fn from_os_str_cs(original: impl Into<Cow<'a, OsStr>>) -> Result<Self> {
         Self::from_os_str_with_case_sensitivity(original, CaseSensitive)
@@ -376,11 +364,10 @@ impl<'a> PathElementGeneric<'a, CaseSensitivity> {
 
     /// Convenience constructor for a case-insensitive `PathElement` from an OS string.
     ///
-    /// Invalid UTF-8 is accepted; see
-    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
-    ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid.
+    /// Returns [`Error`](crate::Error) if the input is not valid UTF-8 or the
+    /// name is invalid (empty, `.`, `..`, contains `/`, `\0`, or unassigned
+    /// Unicode characters).
     #[cfg(feature = "std")]
     pub fn from_os_str_ci(original: impl Into<Cow<'a, OsStr>>) -> Result<Self> {
         Self::from_os_str_with_case_sensitivity(original, CaseInsensitive)
@@ -394,28 +381,23 @@ where
     /// Creates a new path element from a byte slice with an explicit case-sensitivity
     /// marker.
     ///
-    /// Invalid UTF-8 is accepted; see
-    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
-    ///
     /// This is the most general byte-input constructor. The typed aliases
     /// ([`PathElementCS::from_bytes()`], [`PathElementCI::from_bytes()`]) and the
     /// runtime-dynamic constructors delegate to this method.
     ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
-    /// or contains `/`).
+    /// Returns [`Error`](crate::Error) if the input is not valid UTF-8 or the
+    /// name is invalid (empty, `.`, `..`, contains `/`, `\0`, or unassigned
+    /// Unicode characters).
     pub fn from_bytes_with_case_sensitivity(
         original: impl Into<Cow<'a, [u8]>>,
         case_sensitivity: impl Into<S>,
     ) -> Result<Self> {
-        let cow_str = match original.into() {
-            Cow::Borrowed(b) => String::from_utf8_lossy(b),
-            // TODO: replace with `Cow::Owned(String::from_utf8_lossy_owned(v))` once stable (rust#129436).
-            Cow::Owned(v) => match String::from_utf8_lossy(&v) {
-                // SAFETY: `String::from_utf8_lossy()` returned Borrowed, so the bytes are valid UTF-8.
-                Cow::Borrowed(_) => unsafe { Cow::Owned(String::from_utf8_unchecked(v)) },
-                Cow::Owned(s) => Cow::Owned(s),
-            },
+        let utf8_err =
+            |bytes: &[u8]| ErrorKind::InvalidUtf8.into_error(String::from_utf8_lossy(bytes));
+        let cow_str: Cow<'a, str> = match original.into() {
+            Cow::Borrowed(b) => Cow::Borrowed(core::str::from_utf8(b).map_err(|_| utf8_err(b))?),
+            Cow::Owned(v) => Cow::Owned(String::from_utf8(v).map_err(|e| utf8_err(e.as_bytes()))?),
         };
         Self::with_case_sensitivity(cow_str, case_sensitivity)
     }
@@ -423,12 +405,10 @@ where
     /// Creates a new path element from an OS string with an explicit case-sensitivity
     /// marker.
     ///
-    /// Invalid UTF-8 is accepted; see
-    /// [Normalization pipeline](crate#normalization-pipeline) step 0.
-    ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
-    /// or contains `/`).
+    /// Returns [`Error`](crate::Error) if the input is not valid UTF-8 or the
+    /// name is invalid (empty, `.`, `..`, contains `/`, `\0`, or unassigned
+    /// Unicode characters).
     #[cfg(feature = "std")]
     pub fn from_os_str_with_case_sensitivity(
         original: impl Into<Cow<'a, OsStr>>,
@@ -448,8 +428,8 @@ where
     /// constructors delegate to this method.
     ///
     /// # Errors
-    /// Returns [`Error`](crate::Error) if the name is invalid (empty after
-    /// normalization, `.`, `..`, or contains `/`).
+    /// Returns [`Error`](crate::Error) if the name is invalid (empty, `.`, `..`,
+    /// contains `/`, `\0`, or unassigned Unicode characters).
     pub fn with_case_sensitivity(
         original: impl Into<Cow<'a, str>>,
         case_sensitivity: impl Into<S>,
@@ -779,6 +759,7 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::{PathElement, PathElementCI, PathElementCS};
+    use crate::ErrorKind;
     use crate::case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
     use crate::normalize::{normalize_ci_from_normalized_cs, normalize_cs};
     use crate::os::os_compatible_from_normalized_cs;
@@ -1379,353 +1360,188 @@ mod tests {
         assert_eq!(dyn_ci.partial_cmp(&cs), None);
     }
 
-    // --- from_os_str / os_str / into_os_str ---
-
-    #[cfg(feature = "std")]
-    mod os_str_tests {
-        use std::borrow::Cow;
-        use std::ffi::{OsStr, OsString};
-
-        #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
-        use wasm_bindgen_test::wasm_bindgen_test as test;
-
-        use crate::case_sensitivity::{CaseInsensitive, CaseSensitivity};
-        use crate::path_element::{PathElement, PathElementCI, PathElementCS};
-
-        #[test]
-        fn from_os_str_borrowed_matches_new() {
-            let input = OsStr::new("hello.txt");
-            let from_os = PathElementCS::from_os_str(input).unwrap();
-            let from_new = PathElementCS::new("hello.txt").unwrap();
-            assert_eq!(from_os.original(), from_new.original());
-            assert_eq!(from_os.normalized(), from_new.normalized());
-            assert_eq!(from_os.os_compatible(), from_new.os_compatible());
-        }
-
-        #[test]
-        fn from_os_str_owned_matches_new() {
-            let input = OsString::from("Hello.txt");
-            let from_os = PathElementCI::from_os_str(input).unwrap();
-            let from_new = PathElementCI::new("Hello.txt").unwrap();
-            assert_eq!(from_os.original(), from_new.original());
-            assert_eq!(from_os.normalized(), from_new.normalized());
-            assert_eq!(from_os.os_compatible(), from_new.os_compatible());
-        }
-
-        #[test]
-        fn from_os_str_borrowed_preserves_borrow() {
-            let input = OsStr::new("hello.txt");
-            let pe = PathElementCS::from_os_str(input).unwrap();
-            let orig = pe.into_original();
-            assert!(matches!(orig, Cow::Borrowed(_)));
-        }
-
-        #[cfg(unix)]
-        #[test]
-        fn from_os_str_invalid_utf8_borrowed() {
-            use std::os::unix::ffi::OsStrExt;
-            let input = OsStr::from_bytes(&[0x68, 0x69, 0xFF]); // "hi" + invalid byte
-            let pe = PathElementCS::from_os_str(input).unwrap();
-            assert_eq!(pe.original(), "hi\u{FFFD}");
-        }
-
-        #[cfg(unix)]
-        #[test]
-        fn from_os_str_invalid_utf8_owned() {
-            use std::os::unix::ffi::OsStrExt;
-            let input = OsStr::from_bytes(&[0x68, 0x69, 0xFF]).to_os_string();
-            let pe = PathElementCS::from_os_str(input).unwrap();
-            assert_eq!(pe.original(), "hi\u{FFFD}");
-        }
-
-        #[cfg(windows)]
-        #[test]
-        fn from_os_str_invalid_utf8_borrowed() {
-            use std::os::windows::ffi::OsStringExt;
-            // Unpaired surrogate U+D800 encodes as 3 WTF-8 bytes, each replaced by U+FFFD
-            let input = OsString::from_wide(&[0x68, 0xD800, 0x69]);
-            let pe = PathElementCS::from_os_str(input.as_os_str()).unwrap();
-            assert_eq!(pe.original(), "h\u{FFFD}\u{FFFD}\u{FFFD}i");
-        }
-
-        #[cfg(windows)]
-        #[test]
-        fn from_os_str_invalid_utf8_owned() {
-            use std::os::windows::ffi::OsStringExt;
-            let input = OsString::from_wide(&[0x68, 0xD800, 0x69]);
-            let pe = PathElementCS::from_os_str(input).unwrap();
-            assert_eq!(pe.original(), "h\u{FFFD}\u{FFFD}\u{FFFD}i");
-        }
-
-        // CI "H\tllo": original="H\tllo", os_compatible="H␉llo", normalized="h␉llo"
-        // All three differ, so asserting "H\u{2409}llo" proves it's os_compatible.
-        #[test]
-        fn os_str_returns_os_compatible() {
-            let pe = PathElementCI::new("H\tllo").unwrap();
-            assert_eq!(pe.os_str(), OsStr::new("H\u{2409}llo"));
-        }
-
-        #[test]
-        fn into_os_str_returns_os_compatible() {
-            let pe = PathElementCI::new("H\tllo").unwrap();
-            let result = pe.into_os_str();
-            assert_eq!(result, OsStr::new("H\u{2409}llo"));
-        }
-
-        #[test]
-        fn into_os_str_borrows_when_no_transformation() {
-            let input = OsStr::new("hello.txt");
-            let pe = PathElementCS::from_os_str(input).unwrap();
-            let result = pe.into_os_str();
-            assert!(matches!(result, Cow::Borrowed(_)));
-            assert_eq!(result, OsStr::new("hello.txt"));
-        }
-
-        #[test]
-        fn into_os_str_ci_borrows_when_already_folded() {
-            let input = OsStr::new("hello.txt");
-            let pe = PathElementCI::from_os_str(input).unwrap();
-            let result = pe.into_os_str();
-            assert!(matches!(result, Cow::Borrowed(_)));
-            assert_eq!(result, OsStr::new("hello.txt"));
-        }
-
-        // Borrowed input, but NFC normalization produces owned output.
-        // On Apple, the os-compatible form is NFD, which matches the NFD input, so it borrows.
-        #[test]
-        fn into_os_str_owned_when_nfc_transforms() {
-            let input = OsStr::new("e\u{0301}.txt"); // NFD
-            let pe = PathElementCS::from_os_str(input).unwrap();
-            let result = pe.into_os_str();
-            #[cfg(target_vendor = "apple")]
-            assert!(matches!(result, Cow::Borrowed(_)));
-            #[cfg(not(target_vendor = "apple"))]
-            assert!(matches!(result, Cow::Owned(_)));
-        }
-
-        // NFC input borrows on non-Apple (os-compatible is NFC), owned on Apple (os-compatible is NFD).
-        #[test]
-        fn into_os_str_owned_when_nfd_transforms() {
-            let input = OsStr::new("\u{00E9}.txt"); // NFC
-            let pe = PathElementCS::from_os_str(input).unwrap();
-            let result = pe.into_os_str();
-            #[cfg(target_vendor = "apple")]
-            assert!(matches!(result, Cow::Owned(_)));
-            #[cfg(not(target_vendor = "apple"))]
-            assert!(matches!(result, Cow::Borrowed(_)));
-        }
-
-        #[test]
-        fn from_os_str_cs_matches_typed() {
-            let input = OsStr::new("Hello.txt");
-            let dyn_pe = PathElement::from_os_str_cs(input).unwrap();
-            let cs_pe = PathElementCS::from_os_str(input).unwrap();
-            assert_eq!(dyn_pe.normalized(), cs_pe.normalized());
-            assert_eq!(dyn_pe.os_compatible(), cs_pe.os_compatible());
-            assert_eq!(dyn_pe.case_sensitivity(), CaseSensitivity::Sensitive);
-        }
-
-        #[test]
-        fn from_os_str_ci_matches_typed() {
-            let input = OsStr::new("Hello.txt");
-            let dyn_pe = PathElement::from_os_str_ci(input).unwrap();
-            let ci_pe = PathElementCI::from_os_str(input).unwrap();
-            assert_eq!(dyn_pe.normalized(), ci_pe.normalized());
-            assert_eq!(dyn_pe.os_compatible(), ci_pe.os_compatible());
-            assert_eq!(dyn_pe.case_sensitivity(), CaseSensitivity::Insensitive);
-        }
-
-        #[test]
-        fn from_os_str_dynamic_case_sensitivity() {
-            let input = OsStr::new("Hello.txt");
-            let pe = PathElement::from_os_str(input, CaseInsensitive).unwrap();
-            assert_eq!(pe.normalized(), "hello.txt");
-        }
-    }
-
     // --- from_bytes ---
 
-    mod from_bytes_tests {
-        use alloc::borrow::Cow;
-        use alloc::vec;
+    #[test]
+    fn from_bytes_cs_borrowed_matches_new() {
+        let pe_bytes = PathElementCS::from_bytes(b"hello.txt" as &[u8]).unwrap();
+        let pe_str = PathElementCS::new("hello.txt").unwrap();
+        assert_eq!(pe_bytes.original(), pe_str.original());
+        assert_eq!(pe_bytes.normalized(), pe_str.normalized());
+        assert_eq!(pe_bytes.os_compatible(), pe_str.os_compatible());
+    }
 
-        #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
-        use wasm_bindgen_test::wasm_bindgen_test as test;
+    #[test]
+    fn from_bytes_ci_borrowed_matches_new() {
+        let pe_bytes = PathElementCI::from_bytes(b"Hello.txt" as &[u8]).unwrap();
+        let pe_str = PathElementCI::new("Hello.txt").unwrap();
+        assert_eq!(pe_bytes.original(), pe_str.original());
+        assert_eq!(pe_bytes.normalized(), pe_str.normalized());
+        assert_eq!(pe_bytes.os_compatible(), pe_str.os_compatible());
+    }
 
-        use crate::case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
-        use crate::path_element::{PathElement, PathElementCI, PathElementCS};
+    #[test]
+    fn from_bytes_owned_matches_new() {
+        let pe_bytes = PathElementCS::from_bytes(b"hello.txt".to_vec()).unwrap();
+        let pe_str = PathElementCS::new("hello.txt").unwrap();
+        assert_eq!(pe_bytes.original(), pe_str.original());
+        assert_eq!(pe_bytes.normalized(), pe_str.normalized());
+    }
 
-        #[test]
-        fn from_bytes_cs_borrowed_matches_new() {
-            let pe_bytes = PathElementCS::from_bytes(b"hello.txt" as &[u8]).unwrap();
-            let pe_str = PathElementCS::new("hello.txt").unwrap();
-            assert_eq!(pe_bytes.original(), pe_str.original());
-            assert_eq!(pe_bytes.normalized(), pe_str.normalized());
-            assert_eq!(pe_bytes.os_compatible(), pe_str.os_compatible());
-        }
+    #[test]
+    fn from_bytes_borrowed_preserves_borrow() {
+        let input: &[u8] = b"hello.txt";
+        let pe = PathElementCS::from_bytes(input).unwrap();
+        let orig = pe.into_original();
+        assert!(matches!(orig, Cow::Borrowed(_)));
+    }
 
-        #[test]
-        fn from_bytes_ci_borrowed_matches_new() {
-            let pe_bytes = PathElementCI::from_bytes(b"Hello.txt" as &[u8]).unwrap();
-            let pe_str = PathElementCI::new("Hello.txt").unwrap();
-            assert_eq!(pe_bytes.original(), pe_str.original());
-            assert_eq!(pe_bytes.normalized(), pe_str.normalized());
-            assert_eq!(pe_bytes.os_compatible(), pe_str.os_compatible());
-        }
+    #[test]
+    fn from_bytes_owned_is_owned() {
+        let pe = PathElementCS::from_bytes(b"hello.txt".to_vec()).unwrap();
+        assert!(pe.is_owned());
+    }
 
-        #[test]
-        fn from_bytes_owned_matches_new() {
-            let pe_bytes = PathElementCS::from_bytes(b"hello.txt".to_vec()).unwrap();
-            let pe_str = PathElementCS::new("hello.txt").unwrap();
-            assert_eq!(pe_bytes.original(), pe_str.original());
-            assert_eq!(pe_bytes.normalized(), pe_str.normalized());
-        }
+    #[test]
+    fn from_bytes_invalid_utf8_borrowed_rejected() {
+        let input: &[u8] = &[0x68, 0x69, 0xFF]; // "hi" + invalid byte
+        let err = PathElementCS::from_bytes(input).unwrap_err();
+        assert_eq!(*err.kind(), ErrorKind::InvalidUtf8);
+    }
 
-        #[test]
-        fn from_bytes_borrowed_preserves_borrow() {
-            let input: &[u8] = b"hello.txt";
-            let pe = PathElementCS::from_bytes(input).unwrap();
-            let orig = pe.into_original();
-            assert!(matches!(orig, Cow::Borrowed(_)));
-        }
+    #[test]
+    fn from_bytes_invalid_utf8_owned_rejected() {
+        let input = vec![0x68, 0x69, 0xFF];
+        let err = PathElementCS::from_bytes(input).unwrap_err();
+        assert_eq!(*err.kind(), ErrorKind::InvalidUtf8);
+    }
 
-        #[test]
-        fn from_bytes_owned_is_owned() {
-            let pe = PathElementCS::from_bytes(b"hello.txt".to_vec()).unwrap();
-            assert!(pe.is_owned());
-        }
+    #[test]
+    fn from_bytes_dynamic_case_sensitivity() {
+        let pe = PathElement::from_bytes(b"Hello.txt" as &[u8], CaseInsensitive).unwrap();
+        assert_eq!(pe.normalized(), "hello.txt");
+        assert_eq!(pe.case_sensitivity(), CaseSensitivity::Insensitive);
+    }
 
-        #[test]
-        fn from_bytes_invalid_utf8_borrowed_uses_replacement() {
-            let input: &[u8] = &[0x68, 0x69, 0xFF]; // "hi" + invalid byte
-            let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "hi\u{FFFD}");
-        }
+    #[test]
+    fn from_bytes_cs_matches_typed() {
+        let input: &[u8] = b"Hello.txt";
+        let dyn_pe = PathElement::from_bytes_cs(input).unwrap();
+        let cs_pe = PathElementCS::from_bytes(input).unwrap();
+        assert_eq!(dyn_pe.normalized(), cs_pe.normalized());
+        assert_eq!(dyn_pe.os_compatible(), cs_pe.os_compatible());
+        assert_eq!(dyn_pe.case_sensitivity(), CaseSensitivity::Sensitive);
+    }
 
-        #[test]
-        fn from_bytes_invalid_utf8_owned_uses_replacement() {
-            let input = vec![0x68, 0x69, 0xFF];
-            let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "hi\u{FFFD}");
-        }
+    #[test]
+    fn from_bytes_ci_matches_typed() {
+        let input: &[u8] = b"Hello.txt";
+        let dyn_pe = PathElement::from_bytes_ci(input).unwrap();
+        let ci_pe = PathElementCI::from_bytes(input).unwrap();
+        assert_eq!(dyn_pe.normalized(), ci_pe.normalized());
+        assert_eq!(dyn_pe.os_compatible(), ci_pe.os_compatible());
+        assert_eq!(dyn_pe.case_sensitivity(), CaseSensitivity::Insensitive);
+    }
 
-        #[test]
-        fn from_bytes_dynamic_case_sensitivity() {
-            let pe = PathElement::from_bytes(b"Hello.txt" as &[u8], CaseInsensitive).unwrap();
-            assert_eq!(pe.normalized(), "hello.txt");
-            assert_eq!(pe.case_sensitivity(), CaseSensitivity::Insensitive);
-        }
+    #[test]
+    fn from_bytes_with_case_sensitivity_cs() {
+        let pe = PathElementCS::from_bytes(b"Hello.txt" as &[u8]).unwrap();
+        assert_eq!(pe.normalized(), "Hello.txt");
+    }
 
-        #[test]
-        fn from_bytes_cs_matches_typed() {
-            let input: &[u8] = b"Hello.txt";
-            let dyn_pe = PathElement::from_bytes_cs(input).unwrap();
-            let cs_pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(dyn_pe.normalized(), cs_pe.normalized());
-            assert_eq!(dyn_pe.os_compatible(), cs_pe.os_compatible());
-            assert_eq!(dyn_pe.case_sensitivity(), CaseSensitivity::Sensitive);
-        }
+    #[test]
+    fn from_bytes_with_case_sensitivity_ci() {
+        let pe = PathElementCI::from_bytes(b"Hello.txt" as &[u8]).unwrap();
+        assert_eq!(pe.normalized(), "hello.txt");
+    }
 
-        #[test]
-        fn from_bytes_ci_matches_typed() {
-            let input: &[u8] = b"Hello.txt";
-            let dyn_pe = PathElement::from_bytes_ci(input).unwrap();
-            let ci_pe = PathElementCI::from_bytes(input).unwrap();
-            assert_eq!(dyn_pe.normalized(), ci_pe.normalized());
-            assert_eq!(dyn_pe.os_compatible(), ci_pe.os_compatible());
-            assert_eq!(dyn_pe.case_sensitivity(), CaseSensitivity::Insensitive);
-        }
+    #[test]
+    fn from_bytes_rejects_empty() {
+        assert!(PathElementCS::from_bytes(b"" as &[u8]).is_err());
+    }
 
-        #[test]
-        fn from_bytes_with_case_sensitivity_cs() {
-            let pe = PathElementCS::from_bytes(b"Hello.txt" as &[u8]).unwrap();
-            assert_eq!(pe.normalized(), "Hello.txt");
-        }
+    #[test]
+    fn from_bytes_rejects_dot() {
+        assert!(PathElementCS::from_bytes(b"." as &[u8]).is_err());
+    }
 
-        #[test]
-        fn from_bytes_with_case_sensitivity_ci() {
-            let pe = PathElementCI::from_bytes(b"Hello.txt" as &[u8]).unwrap();
-            assert_eq!(pe.normalized(), "hello.txt");
-        }
+    #[test]
+    fn from_bytes_rejects_dotdot() {
+        assert!(PathElementCS::from_bytes(b".." as &[u8]).is_err());
+    }
 
-        #[test]
-        fn from_bytes_rejects_empty() {
-            assert!(PathElementCS::from_bytes(b"" as &[u8]).is_err());
-        }
+    #[test]
+    fn from_bytes_rejects_slash() {
+        assert!(PathElementCS::from_bytes(b"a/b" as &[u8]).is_err());
+    }
 
-        #[test]
-        fn from_bytes_rejects_dot() {
-            assert!(PathElementCS::from_bytes(b"." as &[u8]).is_err());
-        }
+    #[test]
+    fn from_bytes_rejects_null() {
+        assert!(PathElementCS::from_bytes(b"\0" as &[u8]).is_err());
+    }
 
-        #[test]
-        fn from_bytes_rejects_dotdot() {
-            assert!(PathElementCS::from_bytes(b".." as &[u8]).is_err());
-        }
+    #[test]
+    fn from_bytes_dynamic_sensitive() {
+        let pe = PathElement::from_bytes(b"Hello.txt" as &[u8], CaseSensitive).unwrap();
+        assert_eq!(pe.normalized(), "Hello.txt");
+        assert_eq!(pe.case_sensitivity(), CaseSensitivity::Sensitive);
+    }
 
-        #[test]
-        fn from_bytes_rejects_slash() {
-            assert!(PathElementCS::from_bytes(b"a/b" as &[u8]).is_err());
-        }
+    // --- Invalid UTF-8 rejection ---
 
-        #[test]
-        fn from_bytes_rejects_null() {
-            assert!(PathElementCS::from_bytes(b"\0" as &[u8]).is_err());
-        }
+    #[test]
+    fn from_bytes_overlong_null() {
+        // 0xC0 0x80 is an overlong encoding — rejected.
+        let input: &[u8] = &[0x61, 0xC0, 0x80, 0x62];
+        assert_eq!(
+            *PathElementCS::from_bytes(input).unwrap_err().kind(),
+            ErrorKind::InvalidUtf8
+        );
+    }
 
-        #[test]
-        fn from_bytes_dynamic_sensitive() {
-            let pe = PathElement::from_bytes(b"Hello.txt" as &[u8], CaseSensitive).unwrap();
-            assert_eq!(pe.normalized(), "Hello.txt");
-            assert_eq!(pe.case_sensitivity(), CaseSensitivity::Sensitive);
-        }
+    #[test]
+    fn from_bytes_surrogate_bytes_rejected() {
+        let input: &[u8] = &[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80];
+        assert_eq!(
+            *PathElementCS::from_bytes(input).unwrap_err().kind(),
+            ErrorKind::InvalidUtf8
+        );
+    }
 
-        // --- Invalid byte decoding ---
+    #[test]
+    fn from_bytes_lone_high_surrogate_rejected() {
+        let input: &[u8] = &[0x61, 0xED, 0xA0, 0x80, 0x62];
+        assert_eq!(
+            *PathElementCS::from_bytes(input).unwrap_err().kind(),
+            ErrorKind::InvalidUtf8
+        );
+    }
 
-        #[test]
-        fn from_bytes_overlong_null() {
-            // 0xC0 0x80 is an overlong encoding — replaced with U+FFFD per byte.
-            let input: &[u8] = &[0x61, 0xC0, 0x80, 0x62]; // "a" + overlong + "b"
-            let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "a\u{FFFD}\u{FFFD}b");
-        }
+    #[test]
+    fn from_bytes_lone_low_surrogate_rejected() {
+        let input: &[u8] = &[0x61, 0xED, 0xB0, 0x80, 0x62];
+        assert_eq!(
+            *PathElementCS::from_bytes(input).unwrap_err().kind(),
+            ErrorKind::InvalidUtf8
+        );
+    }
 
-        #[test]
-        fn from_bytes_surrogate_bytes_replaced() {
-            // ED A0 BD ED B8 80 are surrogate half bytes — not valid UTF-8,
-            // each invalid segment replaced with U+FFFD.
-            let input: &[u8] = &[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80];
-            let pe = PathElementCS::from_bytes(input).unwrap();
-            assert!(pe.original().contains('\u{FFFD}'));
-        }
+    #[test]
+    fn from_bytes_overlong_null_only() {
+        let input: &[u8] = &[0xC0, 0x80];
+        assert_eq!(
+            *PathElementCS::from_bytes(input).unwrap_err().kind(),
+            ErrorKind::InvalidUtf8
+        );
+    }
 
-        #[test]
-        fn from_bytes_lone_high_surrogate_replaced() {
-            let input: &[u8] = &[0x61, 0xED, 0xA0, 0x80, 0x62];
-            let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "a\u{FFFD}\u{FFFD}\u{FFFD}b");
-        }
-
-        #[test]
-        fn from_bytes_lone_low_surrogate_replaced() {
-            let input: &[u8] = &[0x61, 0xED, 0xB0, 0x80, 0x62];
-            let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "a\u{FFFD}\u{FFFD}\u{FFFD}b");
-        }
-
-        #[test]
-        fn from_bytes_overlong_null_only() {
-            let input: &[u8] = &[0xC0, 0x80];
-            let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "\u{FFFD}\u{FFFD}");
-        }
-
-        #[test]
-        fn from_bytes_invalid_byte_replaced() {
-            let input: &[u8] = &[0x68, 0x69, 0xFF]; // "hi" + invalid
-            let pe = PathElementCS::from_bytes(input).unwrap();
-            assert_eq!(pe.original(), "hi\u{FFFD}");
-        }
+    #[test]
+    fn from_bytes_invalid_byte_rejected() {
+        let input: &[u8] = &[0x68, 0x69, 0xFF];
+        assert_eq!(
+            *PathElementCS::from_bytes(input).unwrap_err().kind(),
+            ErrorKind::InvalidUtf8
+        );
     }
 
     // --- os_compatible supplementary character tests ---
@@ -1747,5 +1563,177 @@ mod tests {
     fn os_compatible_multiple_supplementary() {
         let pe = PathElementCS::new("𐀀_𝄞_😀").unwrap();
         assert_eq!(pe.os_compatible(), "𐀀_𝄞_😀");
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod os_str_tests {
+    use std::borrow::Cow;
+    use std::ffi::{OsStr, OsString};
+
+    #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use crate::ErrorKind;
+    use crate::case_sensitivity::{CaseInsensitive, CaseSensitivity};
+    use crate::path_element::{PathElement, PathElementCI, PathElementCS};
+
+    #[test]
+    fn from_os_str_borrowed_matches_new() {
+        let input = OsStr::new("hello.txt");
+        let from_os = PathElementCS::from_os_str(input).unwrap();
+        let from_new = PathElementCS::new("hello.txt").unwrap();
+        assert_eq!(from_os.original(), from_new.original());
+        assert_eq!(from_os.normalized(), from_new.normalized());
+        assert_eq!(from_os.os_compatible(), from_new.os_compatible());
+    }
+
+    #[test]
+    fn from_os_str_owned_matches_new() {
+        let input = OsString::from("Hello.txt");
+        let from_os = PathElementCI::from_os_str(input).unwrap();
+        let from_new = PathElementCI::new("Hello.txt").unwrap();
+        assert_eq!(from_os.original(), from_new.original());
+        assert_eq!(from_os.normalized(), from_new.normalized());
+        assert_eq!(from_os.os_compatible(), from_new.os_compatible());
+    }
+
+    #[test]
+    fn from_os_str_borrowed_preserves_borrow() {
+        let input = OsStr::new("hello.txt");
+        let pe = PathElementCS::from_os_str(input).unwrap();
+        let orig = pe.into_original();
+        assert!(matches!(orig, Cow::Borrowed(_)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn from_os_str_invalid_utf8_borrowed_rejected() {
+        use std::os::unix::ffi::OsStrExt;
+        let input = OsStr::from_bytes(&[0x68, 0x69, 0xFF]);
+        assert_eq!(
+            *PathElementCS::from_os_str(input).unwrap_err().kind(),
+            ErrorKind::InvalidUtf8
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn from_os_str_invalid_utf8_owned_rejected() {
+        use std::os::unix::ffi::OsStrExt;
+        let input = OsStr::from_bytes(&[0x68, 0x69, 0xFF]).to_os_string();
+        assert_eq!(
+            *PathElementCS::from_os_str(input).unwrap_err().kind(),
+            ErrorKind::InvalidUtf8
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn from_os_str_invalid_utf8_borrowed_rejected() {
+        use std::os::windows::ffi::OsStringExt;
+        let input = OsString::from_wide(&[0x68, 0xD800, 0x69]);
+        assert_eq!(
+            *PathElementCS::from_os_str(input.as_os_str())
+                .unwrap_err()
+                .kind(),
+            ErrorKind::InvalidUtf8
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn from_os_str_invalid_utf8_owned_rejected() {
+        use std::os::windows::ffi::OsStringExt;
+        let input = OsString::from_wide(&[0x68, 0xD800, 0x69]);
+        assert_eq!(
+            *PathElementCS::from_os_str(input).unwrap_err().kind(),
+            ErrorKind::InvalidUtf8
+        );
+    }
+
+    // CI "H\tllo": original="H\tllo", os_compatible="H␉llo", normalized="h␉llo"
+    // All three differ, so asserting "H\u{2409}llo" proves it's os_compatible.
+    #[test]
+    fn os_str_returns_os_compatible() {
+        let pe = PathElementCI::new("H\tllo").unwrap();
+        assert_eq!(pe.os_str(), OsStr::new("H\u{2409}llo"));
+    }
+
+    #[test]
+    fn into_os_str_returns_os_compatible() {
+        let pe = PathElementCI::new("H\tllo").unwrap();
+        let result = pe.into_os_str();
+        assert_eq!(result, OsStr::new("H\u{2409}llo"));
+    }
+
+    #[test]
+    fn into_os_str_borrows_when_no_transformation() {
+        let input = OsStr::new("hello.txt");
+        let pe = PathElementCS::from_os_str(input).unwrap();
+        let result = pe.into_os_str();
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result, OsStr::new("hello.txt"));
+    }
+
+    #[test]
+    fn into_os_str_ci_borrows_when_already_folded() {
+        let input = OsStr::new("hello.txt");
+        let pe = PathElementCI::from_os_str(input).unwrap();
+        let result = pe.into_os_str();
+        assert!(matches!(result, Cow::Borrowed(_)));
+        assert_eq!(result, OsStr::new("hello.txt"));
+    }
+
+    // Borrowed input, but NFC normalization produces owned output.
+    // On Apple, the os-compatible form is NFD, which matches the NFD input, so it borrows.
+    #[test]
+    fn into_os_str_owned_when_nfc_transforms() {
+        let input = OsStr::new("e\u{0301}.txt"); // NFD
+        let pe = PathElementCS::from_os_str(input).unwrap();
+        let result = pe.into_os_str();
+        #[cfg(target_vendor = "apple")]
+        assert!(matches!(result, Cow::Borrowed(_)));
+        #[cfg(not(target_vendor = "apple"))]
+        assert!(matches!(result, Cow::Owned(_)));
+    }
+
+    // NFC input borrows on non-Apple (os-compatible is NFC), owned on Apple (os-compatible is NFD).
+    #[test]
+    fn into_os_str_owned_when_nfd_transforms() {
+        let input = OsStr::new("\u{00E9}.txt"); // NFC
+        let pe = PathElementCS::from_os_str(input).unwrap();
+        let result = pe.into_os_str();
+        #[cfg(target_vendor = "apple")]
+        assert!(matches!(result, Cow::Owned(_)));
+        #[cfg(not(target_vendor = "apple"))]
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn from_os_str_cs_matches_typed() {
+        let input = OsStr::new("Hello.txt");
+        let dyn_pe = PathElement::from_os_str_cs(input).unwrap();
+        let cs_pe = PathElementCS::from_os_str(input).unwrap();
+        assert_eq!(dyn_pe.normalized(), cs_pe.normalized());
+        assert_eq!(dyn_pe.os_compatible(), cs_pe.os_compatible());
+        assert_eq!(dyn_pe.case_sensitivity(), CaseSensitivity::Sensitive);
+    }
+
+    #[test]
+    fn from_os_str_ci_matches_typed() {
+        let input = OsStr::new("Hello.txt");
+        let dyn_pe = PathElement::from_os_str_ci(input).unwrap();
+        let ci_pe = PathElementCI::from_os_str(input).unwrap();
+        assert_eq!(dyn_pe.normalized(), ci_pe.normalized());
+        assert_eq!(dyn_pe.os_compatible(), ci_pe.os_compatible());
+        assert_eq!(dyn_pe.case_sensitivity(), CaseSensitivity::Insensitive);
+    }
+
+    #[test]
+    fn from_os_str_dynamic_case_sensitivity() {
+        let input = OsStr::new("Hello.txt");
+        let pe = PathElement::from_os_str(input, CaseInsensitive).unwrap();
+        assert_eq!(pe.normalized(), "hello.txt");
     }
 }
