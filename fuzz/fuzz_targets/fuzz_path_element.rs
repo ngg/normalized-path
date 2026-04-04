@@ -36,7 +36,9 @@ fn unmap_control_chars(s: &str) -> String {
 
 fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     #[cfg(target_vendor = "apple")]
-    if let Ok(s) = core::str::from_utf8(data) && !s.contains('\0') {
+    if let Ok(s) = core::str::from_utf8(data)
+        && !s.contains('\0')
+    {
         assert!(
             apple_compatible_from_normalized_cs(s).is_ok(),
             "apple_compatible_from_normalized_cs failed\n\
