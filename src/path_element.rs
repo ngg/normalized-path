@@ -1038,13 +1038,51 @@ mod tests {
     }
 
     #[test]
-    fn path_element_rejects_invalid() {
-        assert!(PathElementCS::new("").is_err());
-        assert!(PathElementCS::new(".").is_err());
-        assert!(PathElementCS::new("..").is_err());
-        assert!(PathElementCS::new("a/b").is_err());
-        assert!(PathElementCS::new("\0").is_err());
-        assert!(PathElementCS::new("a\0b").is_err());
+    fn new_rejects_empty() {
+        assert_eq!(
+            *PathElementCS::new("").unwrap_err().kind(),
+            ErrorKind::Empty
+        );
+    }
+
+    #[test]
+    fn new_rejects_dot() {
+        assert_eq!(
+            *PathElementCS::new(".").unwrap_err().kind(),
+            ErrorKind::CurrentDirectoryMarker
+        );
+    }
+
+    #[test]
+    fn new_rejects_dotdot() {
+        assert_eq!(
+            *PathElementCS::new("..").unwrap_err().kind(),
+            ErrorKind::ParentDirectoryMarker
+        );
+    }
+
+    #[test]
+    fn new_rejects_slash() {
+        assert_eq!(
+            *PathElementCS::new("a/b").unwrap_err().kind(),
+            ErrorKind::ContainsForwardSlash
+        );
+    }
+
+    #[test]
+    fn new_rejects_null() {
+        assert_eq!(
+            *PathElementCS::new("\0").unwrap_err().kind(),
+            ErrorKind::ContainsNullByte
+        );
+    }
+
+    #[test]
+    fn new_rejects_unassigned() {
+        assert_eq!(
+            *PathElementCS::new("\u{0378}").unwrap_err().kind(),
+            ErrorKind::ContainsUnassignedChar
+        );
     }
 
     // --- PartialEq / Eq ---
@@ -1458,27 +1496,58 @@ mod tests {
 
     #[test]
     fn from_bytes_rejects_empty() {
-        assert!(PathElementCS::from_bytes(b"" as &[u8]).is_err());
+        assert_eq!(
+            *PathElementCS::from_bytes(b"" as &[u8]).unwrap_err().kind(),
+            ErrorKind::Empty
+        );
     }
 
     #[test]
     fn from_bytes_rejects_dot() {
-        assert!(PathElementCS::from_bytes(b"." as &[u8]).is_err());
+        assert_eq!(
+            *PathElementCS::from_bytes(b"." as &[u8]).unwrap_err().kind(),
+            ErrorKind::CurrentDirectoryMarker
+        );
     }
 
     #[test]
     fn from_bytes_rejects_dotdot() {
-        assert!(PathElementCS::from_bytes(b".." as &[u8]).is_err());
+        assert_eq!(
+            *PathElementCS::from_bytes(b".." as &[u8])
+                .unwrap_err()
+                .kind(),
+            ErrorKind::ParentDirectoryMarker
+        );
     }
 
     #[test]
     fn from_bytes_rejects_slash() {
-        assert!(PathElementCS::from_bytes(b"a/b" as &[u8]).is_err());
+        assert_eq!(
+            *PathElementCS::from_bytes(b"a/b" as &[u8])
+                .unwrap_err()
+                .kind(),
+            ErrorKind::ContainsForwardSlash
+        );
     }
 
     #[test]
     fn from_bytes_rejects_null() {
-        assert!(PathElementCS::from_bytes(b"\0" as &[u8]).is_err());
+        assert_eq!(
+            *PathElementCS::from_bytes(b"\0" as &[u8])
+                .unwrap_err()
+                .kind(),
+            ErrorKind::ContainsNullByte
+        );
+    }
+
+    #[test]
+    fn from_bytes_rejects_unassigned() {
+        assert_eq!(
+            *PathElementCS::from_bytes("\u{0378}".as_bytes())
+                .unwrap_err()
+                .kind(),
+            ErrorKind::ContainsUnassignedChar
+        );
     }
 
     #[test]
@@ -1607,6 +1676,66 @@ mod os_str_tests {
         assert!(matches!(orig, Cow::Borrowed(_)));
     }
 
+    #[test]
+    fn from_os_str_rejects_empty() {
+        assert_eq!(
+            *PathElementCS::from_os_str(OsStr::new(""))
+                .unwrap_err()
+                .kind(),
+            ErrorKind::Empty
+        );
+    }
+
+    #[test]
+    fn from_os_str_rejects_dot() {
+        assert_eq!(
+            *PathElementCS::from_os_str(OsStr::new("."))
+                .unwrap_err()
+                .kind(),
+            ErrorKind::CurrentDirectoryMarker
+        );
+    }
+
+    #[test]
+    fn from_os_str_rejects_dotdot() {
+        assert_eq!(
+            *PathElementCS::from_os_str(OsStr::new(".."))
+                .unwrap_err()
+                .kind(),
+            ErrorKind::ParentDirectoryMarker
+        );
+    }
+
+    #[test]
+    fn from_os_str_rejects_slash() {
+        assert_eq!(
+            *PathElementCS::from_os_str(OsStr::new("a/b"))
+                .unwrap_err()
+                .kind(),
+            ErrorKind::ContainsForwardSlash
+        );
+    }
+
+    #[test]
+    fn from_os_str_rejects_null() {
+        assert_eq!(
+            *PathElementCS::from_os_str(OsStr::new("\0"))
+                .unwrap_err()
+                .kind(),
+            ErrorKind::ContainsNullByte
+        );
+    }
+
+    #[test]
+    fn from_os_str_rejects_unassigned() {
+        assert_eq!(
+            *PathElementCS::from_os_str(OsStr::new("\u{0378}"))
+                .unwrap_err()
+                .kind(),
+            ErrorKind::ContainsUnassignedChar
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn from_os_str_invalid_utf8_borrowed_rejected() {
@@ -1623,6 +1752,18 @@ mod os_str_tests {
     fn from_os_str_invalid_utf8_owned_rejected() {
         use std::os::unix::ffi::OsStrExt;
         let input = OsStr::from_bytes(&[0x68, 0x69, 0xFF]).to_os_string();
+        assert_eq!(
+            *PathElementCS::from_os_str(input).unwrap_err().kind(),
+            ErrorKind::InvalidUtf8
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn from_os_str_surrogate_bytes_rejected() {
+        use std::os::unix::ffi::OsStrExt;
+        // ED A0 80 is the WTF-8 encoding of unpaired surrogate U+D800.
+        let input = OsStr::from_bytes(&[0x68, 0xED, 0xA0, 0x80, 0x69]);
         assert_eq!(
             *PathElementCS::from_os_str(input).unwrap_err().kind(),
             ErrorKind::InvalidUtf8
