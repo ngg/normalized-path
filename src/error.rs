@@ -67,12 +67,19 @@ impl core::fmt::Display for ErrorKind {
 /// Contains the [`ErrorKind`] and the original input string that caused the error.
 ///
 /// ```
-/// # use normalized_path::PathElementCS;
-/// assert!(PathElementCS::new("").is_err());
-/// assert!(PathElementCS::new(".").is_err());
-/// assert!(PathElementCS::new("..").is_err());
-/// assert!(PathElementCS::new("a/b").is_err());
+/// use normalized_path::{ErrorKind, PathElementCS};
+///
 /// assert!(PathElementCS::new("hello.txt").is_ok());
+///
+/// assert_eq!(PathElementCS::new("a/b").unwrap_err().original(), "a/b");
+///
+/// assert_eq!(PathElementCS::new("").unwrap_err().kind(), ErrorKind::Empty);
+/// assert_eq!(PathElementCS::new(".").unwrap_err().kind(), ErrorKind::CurrentDirectoryMarker);
+/// assert_eq!(PathElementCS::new("..").unwrap_err().kind(), ErrorKind::ParentDirectoryMarker);
+/// assert_eq!(PathElementCS::new("a/b").unwrap_err().kind(), ErrorKind::ContainsForwardSlash);
+/// assert_eq!(PathElementCS::new("a\0b").unwrap_err().kind(), ErrorKind::ContainsNullByte);
+/// assert_eq!(PathElementCS::from_bytes(b"\xff").unwrap_err().kind(), ErrorKind::InvalidUtf8);
+/// assert_eq!(PathElementCS::new("\u{0378}").unwrap_err().kind(), ErrorKind::ContainsUnassignedChar);
 /// ```
 #[derive(Debug)]
 pub struct Error {
