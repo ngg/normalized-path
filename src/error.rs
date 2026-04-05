@@ -30,7 +30,8 @@ pub enum ErrorKind {
 
     /// Apple's `CFStringGetFileSystemRepresentation` failed.
     /// This should never occur in practice, since validation runs before this.
-    #[cfg(target_vendor = "apple")]
+    #[cfg(any(target_vendor = "apple", docsrs))]
+    #[cfg_attr(docsrs, doc(cfg(target_vendor = "apple")))]
     GetFileSystemRepresentationError,
 }
 
@@ -54,7 +55,7 @@ impl core::fmt::Display for ErrorKind {
             Self::ContainsNullByte => f.write_str("contains null byte"),
             Self::InvalidUtf8 => f.write_str("invalid UTF-8"),
             Self::ContainsUnassignedChar => f.write_str("contains unassigned character"),
-            #[cfg(target_vendor = "apple")]
+            #[cfg(any(target_vendor = "apple", docsrs))]
             Self::GetFileSystemRepresentationError => {
                 f.write_str("CFStringGetFileSystemRepresentation failed")
             }
