@@ -164,6 +164,40 @@
 //! type parameters, while the [`CaseSensitivity`] enum provides the same choice at runtime.
 //! All three types implement `Into<CaseSensitivity>`.
 //!
+//! # Unicode version
+//!
+//! All Unicode operations (NFC, NFD, case folding, property lookups) use
+//! **Unicode 17.0.0**. Updating to a newer Unicode version is not considered a
+//! semver-breaking change as long as the normalization pipeline produces identical
+//! results for all strings consisting of characters assigned in the previous version.
+//! If a new Unicode version were to change normalization results for previously
+//! assigned characters, that update would be a semver-breaking change.
+//!
+//! This is unlikely — though not formally guaranteed — due to the following
+//! [Character Encoding Stability Policies](https://www.unicode.org/policies/stability_policy.html):
+//! - If a string contains only characters from a given version of Unicode, and it
+//!   is put into a normalized form in accordance with that version of Unicode, then
+//!   the results will be identical to the results of putting that string into a
+//!   normalized form in accordance with any subsequent version of Unicode.
+//! - Once a character is assigned, its canonical combining class will not change.
+//! - Once a character is encoded, its properties may still be changed, but not in
+//!   such a way as to change the fundamental identity of the character.
+//! - For each string S containing only assigned characters in a given Unicode
+//!   version, `toCasefold(toNFKC(S))` under that version is identical to
+//!   `toCasefold(toNFKC(S))` under any later version of Unicode.
+//!
+//! # `no_std` support
+//!
+//! This crate supports `no_std` environments. Disable the default `std` feature:
+//!
+//! ```toml
+//! [dependencies]
+//! normalized-path = { version = "...", default-features = false }
+//! ```
+//!
+//! The `std` feature enables `from_os_str` constructors and
+//! `os_str`/`into_os_str` accessors. The `alloc` crate is always required.
+//!
 //! # Examples
 //!
 //! ```
@@ -247,40 +281,6 @@
 //!     .collect();
 //! assert_eq!(ci.len(), 1); // case-insensitive: all normalize to "ss"
 //! ```
-//!
-//! # Unicode version
-//!
-//! All Unicode operations (NFC, NFD, case folding, property lookups) use
-//! **Unicode 17.0.0**. Updating to a newer Unicode version is not considered a
-//! semver-breaking change as long as the normalization pipeline produces identical
-//! results for all strings consisting of characters assigned in the previous version.
-//! If a new Unicode version were to change normalization results for previously
-//! assigned characters, that update would be a semver-breaking change.
-//!
-//! This is unlikely — though not formally guaranteed — due to the following
-//! [Character Encoding Stability Policies](https://www.unicode.org/policies/stability_policy.html):
-//! - If a string contains only characters from a given version of Unicode, and it
-//!   is put into a normalized form in accordance with that version of Unicode, then
-//!   the results will be identical to the results of putting that string into a
-//!   normalized form in accordance with any subsequent version of Unicode.
-//! - Once a character is assigned, its canonical combining class will not change.
-//! - Once a character is encoded, its properties may still be changed, but not in
-//!   such a way as to change the fundamental identity of the character.
-//! - For each string S containing only assigned characters in a given Unicode
-//!   version, `toCasefold(toNFKC(S))` under that version is identical to
-//!   `toCasefold(toNFKC(S))` under any later version of Unicode.
-//!
-//! # `no_std` support
-//!
-//! This crate supports `no_std` environments. Disable the default `std` feature:
-//!
-//! ```toml
-//! [dependencies]
-//! normalized-path = { version = "...", default-features = false }
-//! ```
-//!
-//! The `std` feature enables `from_os_str` constructors and
-//! `os_str`/`into_os_str` accessors. The `alloc` crate is always required.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
