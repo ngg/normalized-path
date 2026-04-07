@@ -42,16 +42,6 @@ pub enum ErrorKind {
     GetFileSystemRepresentationError,
 }
 
-impl ErrorKind {
-    /// Converts this error kind into an [`Error`], attaching the original input string.
-    pub(crate) fn into_error(self, original: impl Into<String>) -> Error {
-        Error {
-            original: original.into(),
-            kind: self,
-        }
-    }
-}
-
 impl core::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
@@ -81,41 +71,34 @@ impl core::fmt::Display for ErrorKind {
 ///
 /// assert!(PathElementCS::new("hello.txt").is_ok());
 ///
-/// assert_eq!(PathElementCS::new("a/b").unwrap_err().original(), "a/b");
+/// assert_eq!(PathElementCS::new("a/b").unwrap_err().original, "a/b");
 ///
-/// assert_eq!(PathElementCS::new("").unwrap_err().kind(), ErrorKind::Empty);
-/// assert_eq!(PathElementCS::new(".").unwrap_err().kind(), ErrorKind::CurrentDirectoryMarker);
-/// assert_eq!(PathElementCS::new("..").unwrap_err().kind(), ErrorKind::ParentDirectoryMarker);
-/// assert_eq!(PathElementCS::new("a/b").unwrap_err().kind(), ErrorKind::ContainsForwardSlash);
-/// assert_eq!(PathElementCS::new("a\0b").unwrap_err().kind(), ErrorKind::ContainsNullByte);
-/// assert_eq!(PathElementCS::new("a\x01b").unwrap_err().kind(), ErrorKind::ContainsControlCharacter);
-/// assert_eq!(PathElementCS::new("\u{FEFF}a").unwrap_err().kind(), ErrorKind::ContainsBom);
-/// assert_eq!(PathElementCS::from_bytes(b"\xff").unwrap_err().kind(), ErrorKind::InvalidUtf8);
-/// assert_eq!(PathElementCS::new("\u{0378}").unwrap_err().kind(), ErrorKind::ContainsUnassignedChar);
+/// assert_eq!(PathElementCS::new("").unwrap_err().kind, ErrorKind::Empty);
+/// assert_eq!(PathElementCS::new(".").unwrap_err().kind, ErrorKind::CurrentDirectoryMarker);
+/// assert_eq!(PathElementCS::new("..").unwrap_err().kind, ErrorKind::ParentDirectoryMarker);
+/// assert_eq!(PathElementCS::new("a/b").unwrap_err().kind, ErrorKind::ContainsForwardSlash);
+/// assert_eq!(PathElementCS::new("a\0b").unwrap_err().kind, ErrorKind::ContainsNullByte);
+/// assert_eq!(PathElementCS::new("a\x01b").unwrap_err().kind, ErrorKind::ContainsControlCharacter);
+/// assert_eq!(PathElementCS::new("\u{FEFF}a").unwrap_err().kind, ErrorKind::ContainsBom);
+/// assert_eq!(PathElementCS::from_bytes(b"\xff").unwrap_err().kind, ErrorKind::InvalidUtf8);
+/// assert_eq!(PathElementCS::new("\u{0378}").unwrap_err().kind, ErrorKind::ContainsUnassignedChar);
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Error {
-    original: String,
-    kind: ErrorKind,
+    /// The kind of error.
+    pub kind: ErrorKind,
+    /// The original input string that caused the error.
+    pub original: String,
 }
 
 impl Error {
-    /// Returns the kind of error.
+    /// Creates a new [`Error`] from an [`ErrorKind`] and the original input string.
     #[must_use]
-    pub fn kind(&self) -> ErrorKind {
-        self.kind
-    }
-
-    /// Returns the original input string that caused the error.
-    #[must_use]
-    pub fn original(&self) -> &str {
-        &self.original
-    }
-
-    /// Consumes `self` and returns the original input string.
-    #[must_use]
-    pub fn into_original(self) -> String {
-        self.original
+    pub fn new(kind: ErrorKind, original: impl Into<String>) -> Self {
+        Self {
+            kind,
+            original: original.into(),
+        }
     }
 }
 
@@ -144,12 +127,12 @@ pub type ResultKind<T> = core::result::Result<T, ErrorKind>;
 #[cfg(test)]
 mod tests {
     use alloc::format;
-    use alloc::string::{String, ToString};
+    use alloc::string::ToString;
 
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::ErrorKind;
+    use super::{Error, ErrorKind};
 
     #[test]
     fn error_kind_display() {
@@ -183,46 +166,20 @@ mod tests {
     }
 
     #[test]
-    fn into_error_stores_original() {
-        let err = ErrorKind::Empty.into_error(String::from("  "));
-        assert_eq!(err.kind(), ErrorKind::Empty);
-        assert_eq!(err.original(), "  ");
-    }
-
-    #[test]
-    fn into_error_empty_original() {
-        let err = ErrorKind::Empty.into_error(String::new());
-        assert_eq!(err.kind(), ErrorKind::Empty);
-        assert_eq!(err.original(), "");
-    }
-
-    #[test]
-    fn kind_roundtrip() {
-        let err = ErrorKind::ContainsNullByte.into_error(String::from("a\0b"));
-        assert_eq!(err.kind(), ErrorKind::ContainsNullByte);
-    }
-
-    #[test]
-    fn into_original() {
-        let err = ErrorKind::Empty.into_error(String::from("  "));
-        assert_eq!(err.into_original(), "  ");
-    }
-
-    #[test]
     fn error_display_with_original() {
-        let err = ErrorKind::ContainsForwardSlash.into_error(String::from("a/b"));
+        let err = Error::new(ErrorKind::ContainsForwardSlash, "a/b");
         assert_eq!(format!("{err}"), "contains forward slash: \"a/b\"");
     }
 
     #[test]
     fn error_display_empty_original() {
-        let err = ErrorKind::Empty.into_error(String::new());
+        let err = Error::new(ErrorKind::Empty, "");
         assert_eq!(format!("{err}"), "empty path element");
     }
 
     #[test]
     fn error_debug() {
-        let err = ErrorKind::Empty.into_error(String::from("."));
+        let err = Error::new(ErrorKind::Empty, ".");
         let debug = format!("{err:?}");
         assert!(debug.contains("Empty"));
         assert!(debug.contains('.'));
@@ -231,56 +188,56 @@ mod tests {
     #[test]
     fn path_element_error_has_original() {
         let err = crate::PathElementCS::new("a/b").unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::ContainsForwardSlash);
-        assert_eq!(err.original(), "a/b");
+        assert_eq!(err.kind, ErrorKind::ContainsForwardSlash);
+        assert_eq!(err.original, "a/b");
     }
 
     #[test]
     fn path_element_error_empty() {
         let err = crate::PathElementCS::new("").unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::Empty);
-        assert_eq!(err.original(), "");
+        assert_eq!(err.kind, ErrorKind::Empty);
+        assert_eq!(err.original, "");
     }
 
     #[test]
     fn path_element_error_dot() {
         let err = crate::PathElementCI::new(".").unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::CurrentDirectoryMarker);
-        assert_eq!(err.original(), ".");
+        assert_eq!(err.kind, ErrorKind::CurrentDirectoryMarker);
+        assert_eq!(err.original, ".");
     }
 
     #[test]
     fn path_element_error_dotdot() {
         let err = crate::PathElementCS::new("..").unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::ParentDirectoryMarker);
-        assert_eq!(err.original(), "..");
+        assert_eq!(err.kind, ErrorKind::ParentDirectoryMarker);
+        assert_eq!(err.original, "..");
     }
 
     #[test]
     fn path_element_error_null_byte() {
         let err = crate::PathElementCS::new("a\0b").unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::ContainsNullByte);
-        assert_eq!(err.original(), "a\0b");
+        assert_eq!(err.kind, ErrorKind::ContainsNullByte);
+        assert_eq!(err.original, "a\0b");
     }
 
     #[test]
     fn path_element_error_control_character() {
         let err = crate::PathElementCS::new("a\x01b").unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::ContainsControlCharacter);
-        assert_eq!(err.original(), "a\x01b");
+        assert_eq!(err.kind, ErrorKind::ContainsControlCharacter);
+        assert_eq!(err.original, "a\x01b");
     }
 
     #[test]
     fn path_element_error_bom() {
         let err = crate::PathElementCS::new("\u{FEFF}hello").unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::ContainsBom);
-        assert_eq!(err.original(), "\u{FEFF}hello");
+        assert_eq!(err.kind, ErrorKind::ContainsBom);
+        assert_eq!(err.original, "\u{FEFF}hello");
     }
 
     #[test]
     fn path_element_error_whitespace_trimmed_to_empty() {
         let err = crate::PathElementCS::new("   ").unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::Empty);
-        assert_eq!(err.original(), "   ");
+        assert_eq!(err.kind, ErrorKind::Empty);
+        assert_eq!(err.original, "   ");
     }
 }

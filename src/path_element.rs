@@ -5,7 +5,7 @@ use std::ffi::{OsStr, OsString};
 
 use crate::Result;
 use crate::case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
-use crate::error::ErrorKind;
+use crate::error::{Error, ErrorKind};
 use crate::normalize::{normalize_ci_from_normalized_cs, normalize_cs};
 use crate::os::os_compatible_from_normalized_cs;
 use crate::utils::SubstringOrOwned;
@@ -394,7 +394,7 @@ where
         case_sensitivity: impl Into<S>,
     ) -> Result<Self> {
         let utf8_err =
-            |bytes: &[u8]| ErrorKind::InvalidUtf8.into_error(String::from_utf8_lossy(bytes));
+            |bytes: &[u8]| Error::new(ErrorKind::InvalidUtf8, String::from_utf8_lossy(bytes));
         let cow_str: Cow<'a, str> = match original.into() {
             Cow::Borrowed(b) => Cow::Borrowed(core::str::from_utf8(b).map_err(|_| utf8_err(b))?),
             Cow::Owned(v) => Cow::Owned(String::from_utf8(v).map_err(|e| utf8_err(e.as_bytes()))?),
@@ -440,7 +440,7 @@ where
 
         let cs_normalized = match normalize_cs(&original) {
             Ok(v) => v,
-            Err(kind) => return Err(kind.into_error(original)),
+            Err(kind) => return Err(Error::new(kind, original)),
         };
         let normalized = match cs {
             CaseSensitivity::Sensitive => SubstringOrOwned::new(&cs_normalized, &original),
@@ -450,7 +450,7 @@ where
         };
         let os_str = match os_compatible_from_normalized_cs(&cs_normalized) {
             Ok(v) => v,
-            Err(kind) => return Err(kind.into_error(original)),
+            Err(kind) => return Err(Error::new(kind, original)),
         };
         let os_compatible = SubstringOrOwned::new(&os_str, &original);
         Ok(Self {
@@ -1033,13 +1033,13 @@ mod tests {
 
     #[test]
     fn new_rejects_empty() {
-        assert_eq!(PathElementCS::new("").unwrap_err().kind(), ErrorKind::Empty);
+        assert_eq!(PathElementCS::new("").unwrap_err().kind, ErrorKind::Empty);
     }
 
     #[test]
     fn new_rejects_dot() {
         assert_eq!(
-            PathElementCS::new(".").unwrap_err().kind(),
+            PathElementCS::new(".").unwrap_err().kind,
             ErrorKind::CurrentDirectoryMarker
         );
     }
@@ -1047,7 +1047,7 @@ mod tests {
     #[test]
     fn new_rejects_dotdot() {
         assert_eq!(
-            PathElementCS::new("..").unwrap_err().kind(),
+            PathElementCS::new("..").unwrap_err().kind,
             ErrorKind::ParentDirectoryMarker
         );
     }
@@ -1055,7 +1055,7 @@ mod tests {
     #[test]
     fn new_rejects_slash() {
         assert_eq!(
-            PathElementCS::new("a/b").unwrap_err().kind(),
+            PathElementCS::new("a/b").unwrap_err().kind,
             ErrorKind::ContainsForwardSlash
         );
     }
@@ -1063,7 +1063,7 @@ mod tests {
     #[test]
     fn new_rejects_null() {
         assert_eq!(
-            PathElementCS::new("\0").unwrap_err().kind(),
+            PathElementCS::new("\0").unwrap_err().kind,
             ErrorKind::ContainsNullByte
         );
     }
@@ -1071,7 +1071,7 @@ mod tests {
     #[test]
     fn new_rejects_unassigned() {
         assert_eq!(
-            PathElementCS::new("\u{0378}").unwrap_err().kind(),
+            PathElementCS::new("\u{0378}").unwrap_err().kind,
             ErrorKind::ContainsUnassignedChar
         );
     }
@@ -1221,7 +1221,7 @@ mod tests {
     fn try_from_dynamic_to_cs_wrong_variant() {
         let pe = PathElement::new("Hello", CaseInsensitive).unwrap();
         let err: PathElementCI<'_> = PathElementCS::try_from(pe).unwrap_err();
-        assert_eq!(err.original(), "Hello");
+        assert_eq!(err.original, "Hello");
         assert_eq!(err.normalized(), "hello");
         assert_eq!(err.os_compatible(), "Hello");
     }
@@ -1309,7 +1309,7 @@ mod tests {
     fn try_from_dynamic_to_ci_wrong_variant() {
         let pe = PathElement::new("Hello", CaseSensitive).unwrap();
         let err: PathElementCS<'_> = PathElementCI::try_from(pe).unwrap_err();
-        assert_eq!(err.original(), "Hello");
+        assert_eq!(err.original, "Hello");
         assert_eq!(err.normalized(), "Hello");
         assert_eq!(err.os_compatible(), "Hello");
     }
@@ -1436,14 +1436,14 @@ mod tests {
     fn from_bytes_invalid_utf8_borrowed_rejected() {
         let input: &[u8] = &[0x68, 0x69, 0xFF]; // "hi" + invalid byte
         let err = PathElementCS::from_bytes(input).unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::InvalidUtf8);
+        assert_eq!(err.kind, ErrorKind::InvalidUtf8);
     }
 
     #[test]
     fn from_bytes_invalid_utf8_owned_rejected() {
         let input = vec![0x68, 0x69, 0xFF];
         let err = PathElementCS::from_bytes(input).unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::InvalidUtf8);
+        assert_eq!(err.kind, ErrorKind::InvalidUtf8);
     }
 
     #[test]
@@ -1488,7 +1488,7 @@ mod tests {
     #[test]
     fn from_bytes_rejects_empty() {
         assert_eq!(
-            PathElementCS::from_bytes(b"" as &[u8]).unwrap_err().kind(),
+            PathElementCS::from_bytes(b"" as &[u8]).unwrap_err().kind,
             ErrorKind::Empty
         );
     }
@@ -1496,7 +1496,7 @@ mod tests {
     #[test]
     fn from_bytes_rejects_dot() {
         assert_eq!(
-            PathElementCS::from_bytes(b"." as &[u8]).unwrap_err().kind(),
+            PathElementCS::from_bytes(b"." as &[u8]).unwrap_err().kind,
             ErrorKind::CurrentDirectoryMarker
         );
     }
@@ -1504,9 +1504,7 @@ mod tests {
     #[test]
     fn from_bytes_rejects_dotdot() {
         assert_eq!(
-            PathElementCS::from_bytes(b".." as &[u8])
-                .unwrap_err()
-                .kind(),
+            PathElementCS::from_bytes(b".." as &[u8]).unwrap_err().kind,
             ErrorKind::ParentDirectoryMarker
         );
     }
@@ -1514,9 +1512,7 @@ mod tests {
     #[test]
     fn from_bytes_rejects_slash() {
         assert_eq!(
-            PathElementCS::from_bytes(b"a/b" as &[u8])
-                .unwrap_err()
-                .kind(),
+            PathElementCS::from_bytes(b"a/b" as &[u8]).unwrap_err().kind,
             ErrorKind::ContainsForwardSlash
         );
     }
@@ -1524,9 +1520,7 @@ mod tests {
     #[test]
     fn from_bytes_rejects_null() {
         assert_eq!(
-            PathElementCS::from_bytes(b"\0" as &[u8])
-                .unwrap_err()
-                .kind(),
+            PathElementCS::from_bytes(b"\0" as &[u8]).unwrap_err().kind,
             ErrorKind::ContainsNullByte
         );
     }
@@ -1536,7 +1530,7 @@ mod tests {
         assert_eq!(
             PathElementCS::from_bytes("\u{0378}".as_bytes())
                 .unwrap_err()
-                .kind(),
+                .kind,
             ErrorKind::ContainsUnassignedChar
         );
     }
@@ -1555,7 +1549,7 @@ mod tests {
         // 0xC0 0x80 is an overlong encoding — rejected.
         let input: &[u8] = &[0x61, 0xC0, 0x80, 0x62];
         assert_eq!(
-            PathElementCS::from_bytes(input).unwrap_err().kind(),
+            PathElementCS::from_bytes(input).unwrap_err().kind,
             ErrorKind::InvalidUtf8
         );
     }
@@ -1564,7 +1558,7 @@ mod tests {
     fn from_bytes_surrogate_bytes_rejected() {
         let input: &[u8] = &[0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80];
         assert_eq!(
-            PathElementCS::from_bytes(input).unwrap_err().kind(),
+            PathElementCS::from_bytes(input).unwrap_err().kind,
             ErrorKind::InvalidUtf8
         );
     }
@@ -1573,7 +1567,7 @@ mod tests {
     fn from_bytes_lone_high_surrogate_rejected() {
         let input: &[u8] = &[0x61, 0xED, 0xA0, 0x80, 0x62];
         assert_eq!(
-            PathElementCS::from_bytes(input).unwrap_err().kind(),
+            PathElementCS::from_bytes(input).unwrap_err().kind,
             ErrorKind::InvalidUtf8
         );
     }
@@ -1582,7 +1576,7 @@ mod tests {
     fn from_bytes_lone_low_surrogate_rejected() {
         let input: &[u8] = &[0x61, 0xED, 0xB0, 0x80, 0x62];
         assert_eq!(
-            PathElementCS::from_bytes(input).unwrap_err().kind(),
+            PathElementCS::from_bytes(input).unwrap_err().kind,
             ErrorKind::InvalidUtf8
         );
     }
@@ -1591,7 +1585,7 @@ mod tests {
     fn from_bytes_overlong_null_only() {
         let input: &[u8] = &[0xC0, 0x80];
         assert_eq!(
-            PathElementCS::from_bytes(input).unwrap_err().kind(),
+            PathElementCS::from_bytes(input).unwrap_err().kind,
             ErrorKind::InvalidUtf8
         );
     }
@@ -1600,7 +1594,7 @@ mod tests {
     fn from_bytes_invalid_byte_rejected() {
         let input: &[u8] = &[0x68, 0x69, 0xFF];
         assert_eq!(
-            PathElementCS::from_bytes(input).unwrap_err().kind(),
+            PathElementCS::from_bytes(input).unwrap_err().kind,
             ErrorKind::InvalidUtf8
         );
     }
@@ -1670,9 +1664,7 @@ mod os_str_tests {
     #[test]
     fn from_os_str_rejects_empty() {
         assert_eq!(
-            PathElementCS::from_os_str(OsStr::new(""))
-                .unwrap_err()
-                .kind(),
+            PathElementCS::from_os_str(OsStr::new("")).unwrap_err().kind,
             ErrorKind::Empty
         );
     }
@@ -1682,7 +1674,7 @@ mod os_str_tests {
         assert_eq!(
             PathElementCS::from_os_str(OsStr::new("."))
                 .unwrap_err()
-                .kind(),
+                .kind,
             ErrorKind::CurrentDirectoryMarker
         );
     }
@@ -1692,7 +1684,7 @@ mod os_str_tests {
         assert_eq!(
             PathElementCS::from_os_str(OsStr::new(".."))
                 .unwrap_err()
-                .kind(),
+                .kind,
             ErrorKind::ParentDirectoryMarker
         );
     }
@@ -1702,7 +1694,7 @@ mod os_str_tests {
         assert_eq!(
             PathElementCS::from_os_str(OsStr::new("a/b"))
                 .unwrap_err()
-                .kind(),
+                .kind,
             ErrorKind::ContainsForwardSlash
         );
     }
@@ -1712,7 +1704,7 @@ mod os_str_tests {
         assert_eq!(
             PathElementCS::from_os_str(OsStr::new("\0"))
                 .unwrap_err()
-                .kind(),
+                .kind,
             ErrorKind::ContainsNullByte
         );
     }
@@ -1722,7 +1714,7 @@ mod os_str_tests {
         assert_eq!(
             PathElementCS::from_os_str(OsStr::new("\u{0378}"))
                 .unwrap_err()
-                .kind(),
+                .kind,
             ErrorKind::ContainsUnassignedChar
         );
     }
@@ -1733,7 +1725,7 @@ mod os_str_tests {
         use std::os::unix::ffi::OsStrExt;
         let input = OsStr::from_bytes(&[0x68, 0x69, 0xFF]);
         assert_eq!(
-            PathElementCS::from_os_str(input).unwrap_err().kind(),
+            PathElementCS::from_os_str(input).unwrap_err().kind,
             ErrorKind::InvalidUtf8
         );
     }
@@ -1744,7 +1736,7 @@ mod os_str_tests {
         use std::os::unix::ffi::OsStrExt;
         let input = OsStr::from_bytes(&[0x68, 0x69, 0xFF]).to_os_string();
         assert_eq!(
-            PathElementCS::from_os_str(input).unwrap_err().kind(),
+            PathElementCS::from_os_str(input).unwrap_err().kind,
             ErrorKind::InvalidUtf8
         );
     }
@@ -1756,7 +1748,7 @@ mod os_str_tests {
         // ED A0 80 is the WTF-8 encoding of unpaired surrogate U+D800.
         let input = OsStr::from_bytes(&[0x68, 0xED, 0xA0, 0x80, 0x69]);
         assert_eq!(
-            PathElementCS::from_os_str(input).unwrap_err().kind(),
+            PathElementCS::from_os_str(input).unwrap_err().kind,
             ErrorKind::InvalidUtf8
         );
     }
@@ -1769,7 +1761,7 @@ mod os_str_tests {
         assert_eq!(
             PathElementCS::from_os_str(input.as_os_str())
                 .unwrap_err()
-                .kind(),
+                .kind,
             ErrorKind::InvalidUtf8
         );
     }
@@ -1780,7 +1772,7 @@ mod os_str_tests {
         use std::os::windows::ffi::OsStringExt;
         let input = OsString::from_wide(&[0x68, 0xD800, 0x69]);
         assert_eq!(
-            PathElementCS::from_os_str(input).unwrap_err().kind(),
+            PathElementCS::from_os_str(input).unwrap_err().kind,
             ErrorKind::InvalidUtf8
         );
     }
