@@ -77,9 +77,8 @@
 //!    ensures combining marks are in canonical order before subsequent steps.
 //!
 //! 2. **Whitespace trimming** -- strips leading and trailing characters with the Unicode
-//!    `White_Space` property, plus the BOM (U+FEFF).
-//!    Many applications strip leading/trailing whitespace silently, and macOS
-//!    automatically strips leading BOMs.
+//!    `White_Space` property.  Many applications strip leading/trailing whitespace
+//!    silently.
 //!
 //! 3. **Fullwidth-to-ASCII mapping** -- maps fullwidth forms (U+FF01--U+FF5E) to their
 //!    ASCII equivalents (U+0021--U+007E).  The Windows OS-compatibility step (see below)
@@ -87,7 +86,7 @@
 //!    step ensures that the OS-compatible form normalizes back to the same value.
 //!
 //! 4. **Validation** -- rejects empty strings, `.`, `..`, names containing `/`,
-//!    null bytes (`\0`), C0 control characters (U+0001--U+001F), and unassigned
+//!    null bytes (`\0`), C0 control characters (U+0001--U+001F), BOM (U+FEFF), and unassigned
 //!    Unicode characters.  The first group is universally special on all OSes and
 //!    cannot be used as regular names.  Control characters are invisible, can break
 //!    terminals and tools, and some OSes reject or silently drop them.  Unassigned
@@ -304,8 +303,8 @@ pub use path_element::{PathElement, PathElementCI, PathElementCS, PathElementGen
 pub mod test_helpers {
     pub use crate::error::ResultKind;
     pub use crate::normalize::{
-        fixup_case_fold, is_whitespace_like, map_fullwidth, normalize_ci_from_normalized_cs,
-        normalize_cs, trim_whitespace_like, validate_path_element,
+        fixup_case_fold, map_fullwidth, normalize_ci_from_normalized_cs, normalize_cs,
+        validate_path_element,
     };
     pub use crate::os::{
         apple_compatible_from_normalized_cs, apple_compatible_from_normalized_cs_fallback,

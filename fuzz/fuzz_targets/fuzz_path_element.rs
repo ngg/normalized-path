@@ -8,7 +8,7 @@ use libfuzzer_sys::fuzz_target;
 use normalized_path::test_helpers::apple_compatible_from_normalized_cs_fallback;
 use normalized_path::test_helpers::{
     apple_compatible_from_normalized_cs, case_fold, fixup_case_fold, is_reserved_on_windows,
-    map_fullwidth, nfc, nfd, normalize_ci_from_normalized_cs, normalize_cs, trim_whitespace_like,
+    is_whitespace, map_fullwidth, nfc, nfd, normalize_ci_from_normalized_cs, normalize_cs,
     validate_path_element, windows_compatible_from_normalized_cs,
 };
 use normalized_path::{CaseSensitivity, PathElement};
@@ -161,9 +161,9 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
         check("trim", trimmed);
     }
 
-    let trimmed_ws = trim_whitespace_like(input);
+    let trimmed_ws = input.trim_matches(is_whitespace);
     if normalize_cs(trimmed_ws).is_ok() {
-        check("trim_whitespace_like", trimmed_ws);
+        check("trim_whitespace", trimmed_ws);
     }
 
     if cs == CaseSensitivity::Insensitive {

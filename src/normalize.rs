@@ -7,12 +7,6 @@ use crate::unicode::{
 };
 use crate::utils::cow;
 
-/// `White_Space` property check extended with the BOM (U+FEFF).
-#[must_use]
-pub fn is_whitespace_like(c: char) -> bool {
-    is_whitespace(c) || c == '\u{FEFF}'
-}
-
 /// Map Fullwidth characters (U+FF01..U+FF5E) to their ASCII equivalents.
 #[must_use]
 pub fn map_fullwidth(s: &str) -> Cow<'_, str> {
@@ -23,11 +17,6 @@ pub fn map_fullwidth(s: &str) -> Cow<'_, str> {
         }),
         s,
     )
-}
-
-/// Trim leading and trailing `White_Space` characters and BOMs.
-pub fn trim_whitespace_like(s: &str) -> &str {
-    s.trim_matches(is_whitespace_like)
 }
 
 /// Post-case-fold fixup for casing inconsistencies.
@@ -97,7 +86,7 @@ pub fn fixup_case_fold(s: &str) -> Cow<'_, str> {
 /// Returns an error if the name is invalid.
 pub fn normalize_cs(name: &str) -> ResultKind<Cow<'_, str>> {
     let s = nfd(name);
-    let s = trim_whitespace_like(&s);
+    let s = s.trim_matches(is_whitespace);
     let s = map_fullwidth(s);
     validate_path_element(&s)?;
     let s = nfc(&s);
@@ -123,7 +112,7 @@ pub fn normalize_ci_from_normalized_cs(cs_normalized: &str) -> Cow<'_, str> {
 /// Validate a normalized path element name.
 ///
 /// Rejects empty strings, `.`, `..`, names containing `/`, `\0`, control
-/// characters (U+0001--U+001F), or unassigned Unicode characters.
+/// characters (U+0001--U+001F), BOM (U+FEFF), or unassigned Unicode characters.
 ///
 /// # Errors
 /// Returns an error if the name is invalid.
@@ -138,6 +127,7 @@ pub fn validate_path_element(name: &str) -> ResultKind<()> {
         match c {
             '\0' => return Err(ErrorKind::ContainsNullByte),
             '\x01'..='\x1F' => return Err(ErrorKind::ContainsControlCharacter),
+            '\u{FEFF}' => return Err(ErrorKind::ContainsBom),
             '/' => return Err(ErrorKind::ContainsForwardSlash),
             _ if !is_assigned(c) => return Err(ErrorKind::ContainsUnassignedChar),
             _ => {}
@@ -156,93 +146,9 @@ mod tests {
 
     use super::{
         fixup_case_fold, map_fullwidth, normalize_ci_from_normalized_cs, normalize_cs,
-        trim_whitespace_like, validate_path_element,
+        validate_path_element,
     };
     use crate::ErrorKind;
-    // --- trim_whitespace_like ---
-
-    #[test]
-    fn trim_whitespace_like_removes_trailing() {
-        assert_eq!(trim_whitespace_like("hello   "), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_removes_leading() {
-        assert_eq!(trim_whitespace_like("   hello"), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_removes_both() {
-        assert_eq!(trim_whitespace_like("  hello  "), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_no_whitespace() {
-        assert_eq!(trim_whitespace_like("hello"), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_middle_preserved() {
-        assert_eq!(trim_whitespace_like("he llo"), "he llo");
-    }
-
-    #[test]
-    fn trim_whitespace_like_empty() {
-        assert_eq!(trim_whitespace_like(""), "");
-    }
-
-    #[test]
-    fn trim_whitespace_like_only_spaces() {
-        assert_eq!(trim_whitespace_like("   "), "");
-    }
-
-    #[test]
-    fn trim_whitespace_like_tabs() {
-        assert_eq!(trim_whitespace_like("\thello\t"), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_ideographic_space() {
-        assert_eq!(trim_whitespace_like("\u{3000}hello\u{3000}"), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_mixed() {
-        assert_eq!(trim_whitespace_like("\t\u{3000} hello \t\u{3000}"), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_bom_leading() {
-        assert_eq!(trim_whitespace_like("\u{FEFF}hello"), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_bom_trailing() {
-        assert_eq!(trim_whitespace_like("hello\u{FEFF}"), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_bom_both() {
-        assert_eq!(trim_whitespace_like("\u{FEFF}hello\u{FEFF}"), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_bom_middle_preserved() {
-        assert_eq!(trim_whitespace_like("he\u{FEFF}llo"), "he\u{FEFF}llo");
-    }
-
-    #[test]
-    fn trim_whitespace_like_only_bom() {
-        assert_eq!(trim_whitespace_like("\u{FEFF}"), "");
-    }
-
-    #[test]
-    fn trim_whitespace_like_multiple_leading_bom() {
-        assert_eq!(
-            trim_whitespace_like("\u{FEFF}\u{FEFF}\u{FEFF}hello"),
-            "hello"
-        );
-    }
 
     // --- map_fullwidth ---
 
@@ -402,23 +308,16 @@ mod tests {
     // --- normalize ---
 
     #[test]
-    fn normalize_trims_leading_bom() {
-        let input = "\u{FEFF}hello.txt";
-        let with_bom = normalize_cs(input).unwrap();
-        let without_bom = normalize_cs("hello.txt").unwrap();
-        assert_eq!(with_bom, without_bom);
-        assert!(matches!(with_bom, Cow::Borrowed(_)));
-        assert!(matches!(without_bom, Cow::Borrowed(_)));
-        assert!(core::ptr::eq(
-            with_bom.as_ptr(),
-            input["\u{FEFF}".len()..].as_ptr()
-        ));
+    fn normalize_rejects_leading_bom() {
+        assert_eq!(
+            normalize_cs("\u{FEFF}hello.txt"),
+            Err(ErrorKind::ContainsBom)
+        );
     }
 
     #[test]
-    fn normalize_preserves_interior_bom() {
-        let result = normalize_cs("he\u{FEFF}llo").unwrap();
-        assert!(result.contains('\u{FEFF}'));
+    fn normalize_rejects_interior_bom() {
+        assert_eq!(normalize_cs("he\u{FEFF}llo"), Err(ErrorKind::ContainsBom));
     }
 
     #[test]
@@ -430,7 +329,7 @@ mod tests {
 
     #[test]
     fn normalize_strips_whitespace() {
-        let with_whitespace = normalize_cs("\t\u{3000} hello \t\u{3000}").unwrap();
+        let with_whitespace = normalize_cs("\u{3000} hello \u{3000}").unwrap();
         let without_whitespace = normalize_cs("hello").unwrap();
         assert_eq!(with_whitespace, without_whitespace);
         assert!(matches!(with_whitespace, Cow::Borrowed(_)));
@@ -467,11 +366,9 @@ mod tests {
         use alloc::format;
         for c in '\x01'..='\x1F' {
             let input = format!("a{c}b");
-            assert!(
-                matches!(
-                    normalize_cs(&input),
-                    Err(ErrorKind::ContainsControlCharacter)
-                ),
+            assert_eq!(
+                normalize_cs(&input),
+                Err(ErrorKind::ContainsControlCharacter),
                 "expected ContainsControlCharacter for U+{:04X}",
                 c as u32
             );
@@ -577,54 +474,63 @@ mod tests {
 
     #[test]
     fn normalize_empty_rejected() {
-        assert!(normalize_cs("").is_err());
+        assert_eq!(normalize_cs(""), Err(ErrorKind::Empty));
     }
 
     #[test]
     fn normalize_dot_rejected() {
-        assert!(normalize_cs(".").is_err());
+        assert_eq!(normalize_cs("."), Err(ErrorKind::CurrentDirectoryMarker));
     }
 
     #[test]
     fn normalize_dotdot_rejected() {
-        assert!(normalize_cs("..").is_err());
+        assert_eq!(normalize_cs(".."), Err(ErrorKind::ParentDirectoryMarker));
     }
 
     #[test]
     fn normalize_slash_rejected() {
-        assert!(normalize_cs("a/b").is_err());
+        assert_eq!(normalize_cs("a/b"), Err(ErrorKind::ContainsForwardSlash));
     }
 
     #[test]
     fn normalize_bom_only_rejected() {
-        assert!(normalize_cs("\u{FEFF}").is_err());
+        assert_eq!(normalize_cs("\u{FEFF}"), Err(ErrorKind::ContainsBom));
     }
 
     #[test]
     fn normalize_bom_dot_rejected() {
-        assert!(normalize_cs("\u{FEFF}.").is_err());
+        assert_eq!(normalize_cs("\u{FEFF}."), Err(ErrorKind::ContainsBom));
     }
 
     // --- validate_path_element ---
 
     #[test]
     fn validate_empty_rejected() {
-        assert!(validate_path_element("").is_err());
+        assert_eq!(validate_path_element(""), Err(ErrorKind::Empty));
     }
 
     #[test]
     fn validate_dot_rejected() {
-        assert!(validate_path_element(".").is_err());
+        assert_eq!(
+            validate_path_element("."),
+            Err(ErrorKind::CurrentDirectoryMarker)
+        );
     }
 
     #[test]
     fn validate_dotdot_rejected() {
-        assert!(validate_path_element("..").is_err());
+        assert_eq!(
+            validate_path_element(".."),
+            Err(ErrorKind::ParentDirectoryMarker)
+        );
     }
 
     #[test]
     fn validate_slash_rejected() {
-        assert!(validate_path_element("a/b").is_err());
+        assert_eq!(
+            validate_path_element("a/b"),
+            Err(ErrorKind::ContainsForwardSlash)
+        );
     }
 
     #[test]
@@ -649,14 +555,14 @@ mod tests {
 
     #[test]
     fn validate_null_byte_rejected() {
-        assert!(matches!(
+        assert_eq!(
             validate_path_element("\0"),
             Err(ErrorKind::ContainsNullByte)
-        ));
-        assert!(matches!(
+        );
+        assert_eq!(
             validate_path_element("a\0b"),
             Err(ErrorKind::ContainsNullByte)
-        ));
+        );
     }
 
     #[test]
@@ -664,11 +570,9 @@ mod tests {
         use alloc::format;
         for c in '\x01'..='\x1F' {
             let input = format!("a{c}b");
-            assert!(
-                matches!(
-                    validate_path_element(&input),
-                    Err(ErrorKind::ContainsControlCharacter)
-                ),
+            assert_eq!(
+                validate_path_element(&input),
+                Err(ErrorKind::ContainsControlCharacter),
                 "expected ContainsControlCharacter for U+{:04X}",
                 c as u32
             );
@@ -676,11 +580,23 @@ mod tests {
     }
 
     #[test]
+    fn validate_bom_rejected() {
+        assert_eq!(
+            validate_path_element("\u{FEFF}hello"),
+            Err(ErrorKind::ContainsBom)
+        );
+        assert_eq!(
+            validate_path_element("he\u{FEFF}llo"),
+            Err(ErrorKind::ContainsBom)
+        );
+    }
+
+    #[test]
     fn validate_unassigned_rejected() {
-        assert!(matches!(
+        assert_eq!(
             validate_path_element("a\u{0378}b"),
             Err(ErrorKind::ContainsUnassignedChar)
-        ));
+        );
     }
 
     #[test]
@@ -693,18 +609,15 @@ mod tests {
 
     #[test]
     fn normalize_cs_unassigned_rejected() {
-        assert!(matches!(
+        assert_eq!(
             normalize_cs("a\u{0378}b"),
             Err(ErrorKind::ContainsUnassignedChar)
-        ));
+        );
     }
 
     #[test]
     fn normalize_cs_null_byte_rejected() {
-        assert!(matches!(
-            normalize_cs("a\0b"),
-            Err(ErrorKind::ContainsNullByte)
-        ));
+        assert_eq!(normalize_cs("a\0b"), Err(ErrorKind::ContainsNullByte));
     }
 
     #[test]

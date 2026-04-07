@@ -24,6 +24,9 @@ pub enum ErrorKind {
     /// The name contains a C0 control character (U+0001--U+001F).
     ContainsControlCharacter,
 
+    /// The name contains a BOM (U+FEFF).
+    ContainsBom,
+
     /// The byte input is not valid UTF-8.
     InvalidUtf8,
 
@@ -57,6 +60,7 @@ impl core::fmt::Display for ErrorKind {
             Self::ContainsForwardSlash => f.write_str("contains forward slash"),
             Self::ContainsNullByte => f.write_str("contains null byte"),
             Self::ContainsControlCharacter => f.write_str("contains control character"),
+            Self::ContainsBom => f.write_str("contains BOM"),
             Self::InvalidUtf8 => f.write_str("invalid UTF-8"),
             Self::ContainsUnassignedChar => f.write_str("contains unassigned character"),
             #[cfg(any(target_vendor = "apple", docsrs))]
@@ -84,6 +88,7 @@ impl core::fmt::Display for ErrorKind {
 /// assert_eq!(PathElementCS::new("a/b").unwrap_err().kind(), ErrorKind::ContainsForwardSlash);
 /// assert_eq!(PathElementCS::new("a\0b").unwrap_err().kind(), ErrorKind::ContainsNullByte);
 /// assert_eq!(PathElementCS::new("a\x01b").unwrap_err().kind(), ErrorKind::ContainsControlCharacter);
+/// assert_eq!(PathElementCS::new("\u{FEFF}a").unwrap_err().kind(), ErrorKind::ContainsBom);
 /// assert_eq!(PathElementCS::from_bytes(b"\xff").unwrap_err().kind(), ErrorKind::InvalidUtf8);
 /// assert_eq!(PathElementCS::new("\u{0378}").unwrap_err().kind(), ErrorKind::ContainsUnassignedChar);
 /// ```
@@ -168,6 +173,7 @@ mod tests {
             ErrorKind::ContainsControlCharacter.to_string(),
             "contains control character"
         );
+        assert_eq!(ErrorKind::ContainsBom.to_string(), "contains BOM");
         assert_eq!(ErrorKind::InvalidUtf8.to_string(), "invalid UTF-8");
         assert_eq!(
             ErrorKind::ContainsUnassignedChar.to_string(),
@@ -264,16 +270,16 @@ mod tests {
     }
 
     #[test]
+    fn path_element_error_bom() {
+        let err = crate::PathElementCS::new("\u{FEFF}hello").unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::ContainsBom);
+        assert_eq!(err.original(), "\u{FEFF}hello");
+    }
+
+    #[test]
     fn path_element_error_whitespace_trimmed_to_empty() {
         let err = crate::PathElementCS::new("   ").unwrap_err();
         assert_eq!(err.kind(), ErrorKind::Empty);
         assert_eq!(err.original(), "   ");
-    }
-
-    #[test]
-    fn path_element_error_bom_trimmed_to_dot() {
-        let err = crate::PathElementCS::new("\u{FEFF}.").unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::CurrentDirectoryMarker);
-        assert_eq!(err.original(), "\u{FEFF}.");
     }
 }
