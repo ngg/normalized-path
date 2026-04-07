@@ -21,6 +21,9 @@ pub enum ErrorKind {
     /// terminator, silently truncating the name.
     ContainsNullByte,
 
+    /// The name contains a C0 control character (U+0001--U+001F).
+    ContainsControlCharacter,
+
     /// The byte input is not valid UTF-8.
     InvalidUtf8,
 
@@ -53,6 +56,7 @@ impl core::fmt::Display for ErrorKind {
             Self::ParentDirectoryMarker => f.write_str("parent directory marker"),
             Self::ContainsForwardSlash => f.write_str("contains forward slash"),
             Self::ContainsNullByte => f.write_str("contains null byte"),
+            Self::ContainsControlCharacter => f.write_str("contains control character"),
             Self::InvalidUtf8 => f.write_str("invalid UTF-8"),
             Self::ContainsUnassignedChar => f.write_str("contains unassigned character"),
             #[cfg(any(target_vendor = "apple", docsrs))]
@@ -79,6 +83,7 @@ impl core::fmt::Display for ErrorKind {
 /// assert_eq!(PathElementCS::new("..").unwrap_err().kind(), ErrorKind::ParentDirectoryMarker);
 /// assert_eq!(PathElementCS::new("a/b").unwrap_err().kind(), ErrorKind::ContainsForwardSlash);
 /// assert_eq!(PathElementCS::new("a\0b").unwrap_err().kind(), ErrorKind::ContainsNullByte);
+/// assert_eq!(PathElementCS::new("a\x01b").unwrap_err().kind(), ErrorKind::ContainsControlCharacter);
 /// assert_eq!(PathElementCS::from_bytes(b"\xff").unwrap_err().kind(), ErrorKind::InvalidUtf8);
 /// assert_eq!(PathElementCS::new("\u{0378}").unwrap_err().kind(), ErrorKind::ContainsUnassignedChar);
 /// ```
@@ -158,6 +163,10 @@ mod tests {
         assert_eq!(
             ErrorKind::ContainsNullByte.to_string(),
             "contains null byte"
+        );
+        assert_eq!(
+            ErrorKind::ContainsControlCharacter.to_string(),
+            "contains control character"
         );
         assert_eq!(ErrorKind::InvalidUtf8.to_string(), "invalid UTF-8");
         assert_eq!(
@@ -245,6 +254,13 @@ mod tests {
         let err = crate::PathElementCS::new("a\0b").unwrap_err();
         assert_eq!(err.kind(), ErrorKind::ContainsNullByte);
         assert_eq!(err.original(), "a\0b");
+    }
+
+    #[test]
+    fn path_element_error_control_character() {
+        let err = crate::PathElementCS::new("a\x01b").unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::ContainsControlCharacter);
+        assert_eq!(err.original(), "a\x01b");
     }
 
     #[test]

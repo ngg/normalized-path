@@ -8,8 +8,8 @@ use libfuzzer_sys::fuzz_target;
 use normalized_path::test_helpers::apple_compatible_from_normalized_cs_fallback;
 use normalized_path::test_helpers::{
     apple_compatible_from_normalized_cs, case_fold, fixup_case_fold, is_reserved_on_windows,
-    map_control_chars, map_fullwidth, nfc, nfd, normalize_ci_from_normalized_cs, normalize_cs,
-    trim_whitespace_like, validate_path_element, windows_compatible_from_normalized_cs,
+    map_fullwidth, nfc, nfd, normalize_ci_from_normalized_cs, normalize_cs, trim_whitespace_like,
+    validate_path_element, windows_compatible_from_normalized_cs,
 };
 use normalized_path::{CaseSensitivity, PathElement};
 
@@ -18,17 +18,6 @@ fn unmap_fullwidth(s: &str) -> String {
     s.chars()
         .map(|c| match c {
             '!'..='~' => char::from_u32(c as u32 + 0xFEE0).unwrap_or(c),
-            _ => c,
-        })
-        .collect()
-}
-
-/// Reverse of `map_control_chars`: map Control Pictures back to control characters.
-fn unmap_control_chars(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            '\u{2401}'..='\u{241F}' => char::from_u32(c as u32 - 0x2400).unwrap_or(c),
-            '\u{2421}' => '\x7F',
             _ => c,
         })
         .collect()
@@ -152,9 +141,7 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     check("nfd", &nfd_input);
     check("nfc", &nfc(input));
     check("map_fullwidth", &map_fullwidth(input));
-    check("map_control_chars", &map_control_chars(input));
     check("unmap_fullwidth", &unmap_fullwidth(input));
-    check("unmap_control_chars", &unmap_control_chars(input));
     check(
         "windows_compatible_from_normalized_cs",
         &*windows_compatible_from_normalized_cs(input),

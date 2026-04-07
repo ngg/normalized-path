@@ -48,7 +48,7 @@ pub type PathElement<'a> = PathElementGeneric<'a, CaseSensitivity>;
 /// A validated, normalized single path element.
 ///
 /// `PathElementGeneric` takes a raw path element name, validates it (rejecting empty
-/// strings, `.`, `..`, strings containing `/` or `\0`, and unassigned Unicode characters), normalizes it through a Unicode normalization pipeline,
+/// strings, `.`, `..`, strings containing `/`, `\0`, control characters, and unassigned Unicode characters), normalizes it through a Unicode normalization pipeline,
 /// and computes an OS-compatible presentation form. All three views -- original,
 /// normalized, and OS-compatible -- are accessible without re-computation.
 ///
@@ -767,11 +767,9 @@ mod tests {
 
     // --- PathElement ---
 
-    // CS "H\tllo": original="H\tllo", normalized="H␉llo", os_compatible="H␉llo"
-    // original != normalized (control mapping), os_compatible == normalized on all platforms.
     #[test]
     fn path_element_cs_matches_freestanding() {
-        let input = "H\tllo";
+        let input = "Hello";
         let pe = PathElementCS::new(Cow::Borrowed(input)).unwrap();
         assert_eq!(pe.original(), input);
         assert_eq!(pe.normalized(), normalize_cs(input).unwrap().as_ref());
@@ -783,15 +781,12 @@ mod tests {
         );
     }
 
-    // CI "H\tllo": original="H\tllo", os_compatible="H␉llo", normalized="h␉llo"
-    // All three differ on all platforms.
     #[test]
     fn path_element_ci_matches_freestanding() {
-        let input = "H\tllo";
+        let input = "Hello";
         let pe = PathElementCI::new(Cow::Borrowed(input)).unwrap();
-        assert_eq!(pe.original(), "H\tllo");
-        assert_eq!(pe.normalized(), "h\u{2409}llo");
-        assert_eq!(pe.os_compatible(), "H\u{2409}llo");
+        assert_eq!(pe.original(), "Hello");
+        assert_eq!(pe.normalized(), "hello");
     }
 
     // CS "nul.e\u{0301}": normalized="nul.é" (NFC), os_compatible is platform-dependent.
@@ -1029,12 +1024,11 @@ mod tests {
 
     #[test]
     fn path_element_into_owned_preserves_values() {
-        let input = "H\tllo";
+        let input = "Hello";
         let pe = PathElementCI::new(Cow::Borrowed(input)).unwrap();
         let owned = pe.into_owned();
-        assert_eq!(owned.original(), "H\tllo");
-        assert_eq!(owned.normalized(), "h\u{2409}llo");
-        assert_eq!(owned.os_compatible(), "H\u{2409}llo");
+        assert_eq!(owned.original(), "Hello");
+        assert_eq!(owned.normalized(), "hello");
     }
 
     #[test]
@@ -1791,19 +1785,18 @@ mod os_str_tests {
         );
     }
 
-    // CI "H\tllo": original="H\tllo", os_compatible="H␉llo", normalized="h␉llo"
-    // All three differ, so asserting "H\u{2409}llo" proves it's os_compatible.
     #[test]
     fn os_str_returns_os_compatible() {
-        let pe = PathElementCI::new("H\tllo").unwrap();
-        assert_eq!(pe.os_str(), OsStr::new("H\u{2409}llo"));
+        let pe = PathElementCS::new("hello.txt").unwrap();
+        assert_eq!(pe.os_str(), OsStr::new(pe.os_compatible()));
     }
 
     #[test]
     fn into_os_str_returns_os_compatible() {
-        let pe = PathElementCI::new("H\tllo").unwrap();
+        let pe = PathElementCS::new("hello.txt").unwrap();
+        let expected = pe.os_compatible().to_owned();
         let result = pe.into_os_str();
-        assert_eq!(result, OsStr::new("H\u{2409}llo"));
+        assert_eq!(result, OsStr::new(&expected));
     }
 
     #[test]

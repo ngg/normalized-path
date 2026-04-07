@@ -20,14 +20,14 @@
 //! - The OS-compatible form of a name, when normalized again, produces the same
 //!   normalized value as the original input (round-trip stability).
 //! - Every valid name is representable on every supported OS.  Characters that
-//!   would be rejected or silently altered (Windows forbidden characters, C0 controls)
-//!   are mapped to visually similar safe alternatives.
+//!   would be rejected or silently altered (Windows forbidden characters) are
+//!   mapped to visually similar safe alternatives.
 //! - If the OS automatically transforms a name (e.g. NFC↔NFD conversion,
 //!   truncation at null bytes), normalizing the transformed name produces the
 //!   same result as normalizing the original.
 //! - In case-insensitive mode, names differing only in case normalize identically,
 //!   including edge cases from Turkish/Azerbaijani and Lithuanian casing rules
-//!   (see step 9 below).
+//!   (see step 8 below).
 //!
 //! **Non-goals:**
 //!
@@ -77,45 +77,37 @@
 //!    ensures combining marks are in canonical order before subsequent steps.
 //!
 //! 2. **Whitespace trimming** -- strips leading and trailing characters with the Unicode
-//!    `White_Space` property, plus the BOM (U+FEFF) and Control Pictures that correspond
-//!    to whitespace control characters (U+2409--U+240D: HT, LF, VT, FF, CR).
+//!    `White_Space` property, plus the BOM (U+FEFF).
 //!    Many applications strip leading/trailing whitespace silently, and macOS
-//!    automatically strips leading BOMs.  Control Pictures are
-//!    included because they are the mapped form of whitespace control characters
-//!    (see step 4), so trimming must be consistent before and after mapping.
+//!    automatically strips leading BOMs.
 //!
 //! 3. **Fullwidth-to-ASCII mapping** -- maps fullwidth forms (U+FF01--U+FF5E) to their
 //!    ASCII equivalents (U+0021--U+007E).  The Windows OS-compatibility step (see below)
 //!    maps certain ASCII characters to fullwidth to avoid Windows restrictions.  This
 //!    step ensures that the OS-compatible form normalizes back to the same value.
 //!
-//! 4. **Control character mapping** -- maps C0 controls (U+0001--U+001F) and DEL (U+007F)
-//!    to their Unicode Control Picture equivalents (U+2401--U+241F, U+2421).  Control
-//!    characters are invisible, can break terminals and tools, and some OSes reject
-//!    or silently drop them.  Mapping to visible Control Pictures preserves the
-//!    information while making the name safe.  (Null bytes are excluded — see step 5.)
+//! 4. **Validation** -- rejects empty strings, `.`, `..`, names containing `/`,
+//!    null bytes (`\0`), C0 control characters (U+0001--U+001F), and unassigned
+//!    Unicode characters.  The first group is universally special on all OSes and
+//!    cannot be used as regular names.  Control characters are invisible, can break
+//!    terminals and tools, and some OSes reject or silently drop them.  Unassigned
+//!    characters are rejected to ensure normalization stability across Unicode
+//!    versions (see [Unicode stability policies](#unicode-stability-policies)).
 //!
-//! 5. **Validation** -- rejects empty strings, `.`, `..`, names containing `/`,
-//!    names containing null bytes (`\0`), and names containing unassigned Unicode
-//!    characters.  The first group is universally special on all OSes and cannot be
-//!    used as regular names.  Unassigned characters are rejected to ensure
-//!    normalization stability across Unicode versions (see
-//!    [Unicode stability policies](#unicode-stability-policies)).
-//!
-//! 6. **NFC composition** -- canonical composition to produce the shortest equivalent
+//! 5. **NFC composition** -- canonical composition to produce the shortest equivalent
 //!    form.
 //!
 //! In **case-insensitive** mode, four additional steps are applied after the above:
 //!
-//! 7. **NFD decomposition** (again, on the NFC result).  Steps 7, 8, and 10
+//! 6. **NFD decomposition** (again, on the NFC result).  Steps 6, 7, and 9
 //!    implement the Unicode canonical caseless matching algorithm (Definition D145):
 //!    *"A string X is a canonical caseless match for a string Y if and only if:
-//!    NFD(toCasefold(NFD(X))) = NFD(toCasefold(NFD(Y)))"*.  Step 9 extends this
+//!    NFD(toCasefold(NFD(X))) = NFD(toCasefold(NFD(Y)))"*.  Step 8 extends this
 //!    with a post-case-fold fixup for Turkish/Azerbaijani and Lithuanian casing.
 //!
-//! 8. **Unicode `toCasefold()`** -- locale-independent full case folding.
+//! 7. **Unicode `toCasefold()`** -- locale-independent full case folding.
 //!
-//! 9. **Post-case-fold fixup** -- maps U+0131 (ı) to ASCII i, and strips
+//! 8. **Post-case-fold fixup** -- maps U+0131 (ı) to ASCII i, and strips
 //!    U+0307 COMBINING DOT ABOVE after any `Soft_Dotted`
 //!    character (e.g. i, j, Cyrillic і/ј), blocked by intervening starters or
 //!    CCC=230 Above combiners (matching the Unicode `After_Soft_Dotted` condition).
@@ -130,8 +122,8 @@
 //!      (e.g. `lt_uppercase("j\u{0307}")` = `J`).  Stripping U+0307 after
 //!      soft-dotted characters ensures stability under both directions.
 //!
-//! 10. **NFC composition** (final) -- recompose after case folding to produce the
-//!     canonical NFC output.
+//! 9. **NFC composition** (final) -- recompose after case folding to produce the
+//!    canonical NFC output.
 //!
 //! # OS compatibility mapping
 //!
@@ -312,8 +304,8 @@ pub use path_element::{PathElement, PathElementCI, PathElementCS, PathElementGen
 pub mod test_helpers {
     pub use crate::error::ResultKind;
     pub use crate::normalize::{
-        fixup_case_fold, is_whitespace_like, map_control_chars, map_fullwidth,
-        normalize_ci_from_normalized_cs, normalize_cs, trim_whitespace_like, validate_path_element,
+        fixup_case_fold, is_whitespace_like, map_fullwidth, normalize_ci_from_normalized_cs,
+        normalize_cs, trim_whitespace_like, validate_path_element,
     };
     pub use crate::os::{
         apple_compatible_from_normalized_cs, apple_compatible_from_normalized_cs_fallback,

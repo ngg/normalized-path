@@ -7,11 +7,10 @@ use crate::unicode::{
 };
 use crate::utils::cow;
 
-/// `White_Space` property check extended with Control Pictures (U+2409–U+240D) that
-/// correspond to whitespace control characters (HT, LF, VT, FF, CR), and the BOM (U+FEFF).
+/// `White_Space` property check extended with the BOM (U+FEFF).
 #[must_use]
 pub fn is_whitespace_like(c: char) -> bool {
-    is_whitespace(c) || ('\u{2409}'..='\u{240D}').contains(&c) || c == '\u{FEFF}'
+    is_whitespace(c) || c == '\u{FEFF}'
 }
 
 /// Map Fullwidth characters (U+FF01..U+FF5E) to their ASCII equivalents.
@@ -26,7 +25,7 @@ pub fn map_fullwidth(s: &str) -> Cow<'_, str> {
     )
 }
 
-/// Trim leading and trailing `White_Space` characters, control pictures, and BOMs.
+/// Trim leading and trailing `White_Space` characters and BOMs.
 pub fn trim_whitespace_like(s: &str) -> &str {
     s.trim_matches(is_whitespace_like)
 }
@@ -89,25 +88,10 @@ pub fn fixup_case_fold(s: &str) -> Cow<'_, str> {
     )
 }
 
-/// Map control characters to Unicode Control Pictures.
-/// 0x01-0x1F → U+2401-U+241F, 0x7F → U+2421.
-/// Null bytes (0x00) are excluded — they are rejected by validation instead.
-#[must_use]
-pub fn map_control_chars(s: &str) -> Cow<'_, str> {
-    cow(
-        s.chars().map(|c| match c {
-            '\x01'..='\x1F' => char::from_u32(c as u32 + 0x2400).unwrap_or(c),
-            '\x7F' => '\u{2421}',
-            _ => c,
-        }),
-        s,
-    )
-}
-
 /// Normalize a plaintext path element name case-sensitively.
 ///
 /// Pipeline: NFD → whitespace trimming → fullwidth mapping →
-/// control char mapping → validation → NFC.
+/// validation → NFC.
 ///
 /// # Errors
 /// Returns an error if the name is invalid.
@@ -115,7 +99,6 @@ pub fn normalize_cs(name: &str) -> ResultKind<Cow<'_, str>> {
     let s = nfd(name);
     let s = trim_whitespace_like(&s);
     let s = map_fullwidth(s);
-    let s = map_control_chars(&s);
     validate_path_element(&s)?;
     let s = nfc(&s);
     debug_assert!(validate_path_element(&s).is_ok());
@@ -126,7 +109,7 @@ pub fn normalize_cs(name: &str) -> ResultKind<Cow<'_, str>> {
 ///
 /// Applies NFD, case folding, post-case-fold fixup ([`fixup_case_fold()`]), and NFC
 /// to a CS-normalized name. Skips the steps already applied by CS normalization
-/// (trim, fullwidth, control chars).
+/// (trim, fullwidth, validation).
 #[must_use]
 pub fn normalize_ci_from_normalized_cs(cs_normalized: &str) -> Cow<'_, str> {
     let s = nfd(cs_normalized);
@@ -139,8 +122,8 @@ pub fn normalize_ci_from_normalized_cs(cs_normalized: &str) -> Cow<'_, str> {
 
 /// Validate a normalized path element name.
 ///
-/// Rejects empty strings, `.`, `..`, names containing `/`, `\0`, or unassigned
-/// Unicode characters.
+/// Rejects empty strings, `.`, `..`, names containing `/`, `\0`, control
+/// characters (U+0001--U+001F), or unassigned Unicode characters.
 ///
 /// # Errors
 /// Returns an error if the name is invalid.
@@ -154,6 +137,7 @@ pub fn validate_path_element(name: &str) -> ResultKind<()> {
     for c in name.chars() {
         match c {
             '\0' => return Err(ErrorKind::ContainsNullByte),
+            '\x01'..='\x1F' => return Err(ErrorKind::ContainsControlCharacter),
             '/' => return Err(ErrorKind::ContainsForwardSlash),
             _ if !is_assigned(c) => return Err(ErrorKind::ContainsUnassignedChar),
             _ => {}
@@ -171,8 +155,8 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::{
-        fixup_case_fold, map_control_chars, map_fullwidth, normalize_ci_from_normalized_cs,
-        normalize_cs, trim_whitespace_like, validate_path_element,
+        fixup_case_fold, map_fullwidth, normalize_ci_from_normalized_cs, normalize_cs,
+        trim_whitespace_like, validate_path_element,
     };
     use crate::ErrorKind;
     // --- trim_whitespace_like ---
@@ -225,26 +209,6 @@ mod tests {
     #[test]
     fn trim_whitespace_like_mixed() {
         assert_eq!(trim_whitespace_like("\t\u{3000} hello \t\u{3000}"), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_control_picture_tab() {
-        assert_eq!(trim_whitespace_like("\u{2409}hello\u{2409}"), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_control_picture_lf() {
-        assert_eq!(trim_whitespace_like("\u{240A}hello\u{240A}"), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_control_picture_cr() {
-        assert_eq!(trim_whitespace_like("\u{240D}hello\u{240D}"), "hello");
-    }
-
-    #[test]
-    fn trim_whitespace_like_control_picture_middle_preserved() {
-        assert_eq!(trim_whitespace_like("he\u{2409}llo"), "he\u{2409}llo");
     }
 
     #[test]
@@ -314,37 +278,6 @@ mod tests {
         let fullwidth: String = ('\u{FF01}'..='\u{FF5E}').collect();
         let ascii: String = ('!'..='~').collect();
         assert_eq!(map_fullwidth(&fullwidth), ascii);
-    }
-
-    // --- map_control_chars ---
-
-    #[test]
-    fn map_control_del() {
-        assert_eq!(map_control_chars("\x7F"), "\u{2421}");
-    }
-
-    #[test]
-    fn map_control_normal_unchanged() {
-        let result = map_control_chars("hello");
-        assert!(matches!(result, Cow::Borrowed(_)));
-        assert_eq!(result, "hello");
-    }
-
-    #[test]
-    fn map_control_mixed() {
-        assert_eq!(map_control_chars("a\x01b\x7Fc"), "a\u{2401}b\u{2421}c");
-    }
-
-    #[test]
-    fn map_control_null_byte_unchanged() {
-        assert_eq!(map_control_chars("\x00"), "\x00");
-    }
-
-    #[test]
-    fn map_control_all_c0_characters() {
-        let controls: String = ('\x01'..='\x1F').collect();
-        let pictures: String = ('\u{2401}'..='\u{241F}').collect();
-        assert_eq!(map_control_chars(&controls), pictures);
     }
 
     // --- fixup_case_fold ---
@@ -530,19 +463,19 @@ mod tests {
     }
 
     #[test]
-    fn normalize_maps_control_chars() {
-        let with_control = normalize_cs("a\x01b").unwrap();
-        let with_picture = normalize_cs("a\u{2401}b").unwrap();
-        assert_eq!(with_control, with_picture);
-    }
-
-    #[test]
-    fn normalize_strips_whitespace_control_pictures() {
-        let with_tab = normalize_cs("\thello").unwrap();
-        let with_picture = normalize_cs("\u{2409}hello").unwrap();
-        let plain = normalize_cs("hello").unwrap();
-        assert_eq!(with_tab, plain);
-        assert_eq!(with_picture, plain);
+    fn normalize_rejects_control_chars() {
+        use alloc::format;
+        for c in '\x01'..='\x1F' {
+            let input = format!("a{c}b");
+            assert!(
+                matches!(
+                    normalize_cs(&input),
+                    Err(ErrorKind::ContainsControlCharacter)
+                ),
+                "expected ContainsControlCharacter for U+{:04X}",
+                c as u32
+            );
+        }
     }
 
     #[test]
@@ -724,6 +657,22 @@ mod tests {
             validate_path_element("a\0b"),
             Err(ErrorKind::ContainsNullByte)
         ));
+    }
+
+    #[test]
+    fn validate_control_character_rejected() {
+        use alloc::format;
+        for c in '\x01'..='\x1F' {
+            let input = format!("a{c}b");
+            assert!(
+                matches!(
+                    validate_path_element(&input),
+                    Err(ErrorKind::ContainsControlCharacter)
+                ),
+                "expected ContainsControlCharacter for U+{:04X}",
+                c as u32
+            );
+        }
     }
 
     #[test]
