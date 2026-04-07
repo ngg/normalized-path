@@ -3,7 +3,8 @@ use alloc::borrow::Cow;
 use crate::ErrorKind;
 use crate::error::ResultKind;
 use crate::unicode::{
-    case_fold, is_above, is_assigned, is_soft_dotted, is_starter, is_whitespace, nfc, nfd,
+    case_fold, is_above, is_assigned, is_control, is_soft_dotted, is_starter, is_whitespace, nfc,
+    nfd,
 };
 use crate::utils::cow;
 
@@ -86,7 +87,7 @@ pub fn fixup_case_fold(s: &str) -> Cow<'_, str> {
 /// Returns an error if the name is invalid.
 pub fn normalize_cs(name: &str) -> ResultKind<Cow<'_, str>> {
     let s = nfd(name);
-    let s = s.trim_matches(is_whitespace);
+    let s = s.trim_matches(|c| is_whitespace(c) && !is_control(c));
     let s = map_fullwidth(s);
     validate_path_element(&s)?;
     let s = nfc(&s);
@@ -112,7 +113,7 @@ pub fn normalize_ci_from_normalized_cs(cs_normalized: &str) -> Cow<'_, str> {
 /// Validate a normalized path element name.
 ///
 /// Rejects empty strings, `.`, `..`, names containing `/`, `\0`, control
-/// characters (U+0001--U+001F), BOM (U+FEFF), or unassigned Unicode characters.
+/// Unicode `Control` characters, BOM (U+FEFF), or unassigned Unicode characters.
 ///
 /// # Errors
 /// Returns an error if the name is invalid.
@@ -126,7 +127,7 @@ pub fn validate_path_element(name: &str) -> ResultKind<()> {
     for c in name.chars() {
         match c {
             '\0' => return Err(ErrorKind::ContainsNullByte),
-            '\x01'..='\x1F' => return Err(ErrorKind::ContainsControlCharacter),
+            _ if is_control(c) => return Err(ErrorKind::ContainsControlCharacter),
             '\u{FEFF}' => return Err(ErrorKind::ContainsBom),
             '/' => return Err(ErrorKind::ContainsForwardSlash),
             _ if !is_assigned(c) => return Err(ErrorKind::ContainsUnassignedChar),
@@ -364,13 +365,14 @@ mod tests {
     #[test]
     fn normalize_rejects_control_chars() {
         use alloc::format;
-        for c in '\x01'..='\x1F' {
+        // All Cc characters except null (which gets ContainsNullByte)
+        for cp in (0x01..=0x1Fu32).chain(0x7F..=0x9F) {
+            let c = char::from_u32(cp).unwrap();
             let input = format!("a{c}b");
             assert_eq!(
                 normalize_cs(&input),
                 Err(ErrorKind::ContainsControlCharacter),
-                "expected ContainsControlCharacter for U+{:04X}",
-                c as u32
+                "expected ContainsControlCharacter for U+{cp:04X}"
             );
         }
     }
@@ -568,13 +570,15 @@ mod tests {
     #[test]
     fn validate_control_character_rejected() {
         use alloc::format;
-        for c in '\x01'..='\x1F' {
+        // All Cc characters except null (which gets ContainsNullByte)
+        let controls = (0x01..=0x1Fu32).chain(0x7F..=0x9Fu32);
+        for cp in controls {
+            let c = char::from_u32(cp).unwrap();
             let input = format!("a{c}b");
             assert_eq!(
                 validate_path_element(&input),
                 Err(ErrorKind::ContainsControlCharacter),
-                "expected ContainsControlCharacter for U+{:04X}",
-                c as u32
+                "expected ContainsControlCharacter for U+{cp:04X}"
             );
         }
     }

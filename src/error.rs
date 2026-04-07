@@ -21,7 +21,8 @@ pub enum ErrorKind {
     /// terminator, silently truncating the name.
     ContainsNullByte,
 
-    /// The name contains a C0 control character (U+0001--U+001F).
+    /// The name contains a character with the Unicode `Control` general category,
+    /// excluding null which has its own variant.
     ContainsControlCharacter,
 
     /// The name contains a BOM (U+FEFF).

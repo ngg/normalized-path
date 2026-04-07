@@ -48,6 +48,12 @@ pub fn is_soft_dotted(c: char) -> bool {
     CodePointSetData::new::<SoftDotted>().contains(c)
 }
 
+/// Whether `c` has `GeneralCategory::Control` (Cc).
+#[must_use]
+pub fn is_control(c: char) -> bool {
+    CodePointMapData::<GeneralCategory>::new().get(c) == GeneralCategory::Control
+}
+
 /// Whether `c` is an assigned character (not `GeneralCategory::Unassigned`).
 #[must_use]
 pub fn is_assigned(c: char) -> bool {
@@ -62,7 +68,8 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::{
-        case_fold, is_above, is_assigned, is_soft_dotted, is_starter, is_whitespace, nfc, nfd,
+        case_fold, is_above, is_assigned, is_control, is_soft_dotted, is_starter, is_whitespace,
+        nfc, nfd,
     };
 
     // --- nfd / nfc ---
@@ -509,6 +516,66 @@ mod tests {
     #[test]
     fn is_soft_dotted_dotless_j() {
         assert!(!is_soft_dotted('\u{0237}')); // ȷ is NOT Soft_Dotted
+    }
+
+    // --- is_control ---
+
+    #[test]
+    fn is_control_null() {
+        assert!(is_control('\0'));
+    }
+
+    #[test]
+    fn is_control_tab() {
+        assert!(is_control('\t'));
+    }
+
+    #[test]
+    fn is_control_newline() {
+        assert!(is_control('\n'));
+    }
+
+    #[test]
+    fn is_control_del() {
+        assert!(is_control('\x7F'));
+    }
+
+    #[test]
+    fn is_control_c1() {
+        assert!(is_control('\u{0085}')); // NEXT LINE (NEL)
+        assert!(is_control('\u{009F}')); // last C1 control
+    }
+
+    #[test]
+    fn is_control_space() {
+        assert!(!is_control(' '));
+    }
+
+    #[test]
+    fn is_control_letter() {
+        assert!(!is_control('a'));
+    }
+
+    #[test]
+    fn is_control_bom() {
+        assert!(!is_control('\u{FEFF}'));
+    }
+
+    #[test]
+    fn control_exhaustive() {
+        // Complete list of General_Category=Control (Cc) characters.
+        // C0: U+0000..U+001F, DEL: U+007F, C1: U+0080..U+009F
+        let expected: alloc::vec::Vec<u32> = (0x0000..=0x001F).chain(0x007F..=0x009F).collect();
+        let mut found = alloc::vec::Vec::new();
+        for cp in 0..=0x10_FFFFu32 {
+            let Some(c) = char::from_u32(cp) else {
+                continue;
+            };
+            if is_control(c) {
+                found.push(cp);
+            }
+        }
+        assert_eq!(found, expected);
     }
 
     // --- is_assigned ---
