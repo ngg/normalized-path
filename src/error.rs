@@ -114,15 +114,15 @@ impl core::fmt::Display for Error {
 
 impl core::error::Error for Error {}
 
-/// A [`Result`](core::result::Result) type alias using this crate's [`Error`].
-pub type Result<T> = core::result::Result<T, Error>;
+/// A [`Result`](core::result::Result) type alias defaulting to this crate's [`Error`].
+pub type Result<T, E = Error> = core::result::Result<T, E>;
 
 /// A [`Result`](core::result::Result) type alias using [`ErrorKind`] directly.
 ///
 /// Used by internal normalization functions that do not have access to the
 /// original input string. The [`PathElement`](crate::PathElementGeneric) constructors
 /// convert `ResultKind` into [`Result`] by attaching the original.
-pub type ResultKind<T> = core::result::Result<T, ErrorKind>;
+pub type ResultKind<T> = Result<T, ErrorKind>;
 
 #[cfg(test)]
 mod tests {

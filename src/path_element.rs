@@ -704,7 +704,7 @@ impl<'a> From<PathElementCI<'a>> for PathElement<'a> {
 impl<'a> TryFrom<PathElement<'a>> for PathElementCS<'a> {
     type Error = PathElementCI<'a>;
 
-    fn try_from(pe: PathElement<'a>) -> core::result::Result<Self, Self::Error> {
+    fn try_from(pe: PathElement<'a>) -> Result<Self, Self::Error> {
         if pe.case_sensitivity == CaseSensitivity::Sensitive {
             Ok(Self {
                 original: pe.original,
@@ -730,7 +730,7 @@ impl<'a> TryFrom<PathElement<'a>> for PathElementCS<'a> {
 impl<'a> TryFrom<PathElement<'a>> for PathElementCI<'a> {
     type Error = PathElementCS<'a>;
 
-    fn try_from(pe: PathElement<'a>) -> core::result::Result<Self, Self::Error> {
+    fn try_from(pe: PathElement<'a>) -> Result<Self, Self::Error> {
         if pe.case_sensitivity == CaseSensitivity::Insensitive {
             Ok(Self {
                 original: pe.original,
