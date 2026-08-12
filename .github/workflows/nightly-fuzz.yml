@@ -1,0 +1,31 @@
+name: Nightly fuzz
+
+on:
+  schedule:
+    - cron: "21 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz-macos:
+    uses: ./.github/workflows/fuzz.yml
+    with:
+      runs-on: macos-latest
+      timeout: 600
+      fork: 3
+
+  fuzz-windows:
+    needs: fuzz-macos
+    uses: ./.github/workflows/fuzz.yml
+    with:
+      runs-on: windows-latest
+      timeout: 600
+
+  fuzz-linux:
+    needs: fuzz-windows
+    uses: ./.github/workflows/fuzz.yml
+    with:
+      runs-on: ubuntu-latest
+      timeout: 600
