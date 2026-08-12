@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+
 DRY_RUN=false
 if [ "${1:-}" = "--dry-run" ]; then
     DRY_RUN=true
