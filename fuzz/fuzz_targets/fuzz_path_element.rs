@@ -24,17 +24,6 @@ fn unmap_fullwidth(s: &str) -> String {
 }
 
 fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
-    #[cfg(target_vendor = "apple")]
-    if let Ok(s) = core::str::from_utf8(data)
-        && !s.contains('\0')
-    {
-        assert!(
-            apple_compatible_from_normalized_cs(s).is_ok(),
-            "apple_compatible_from_normalized_cs failed\n\
-             input: {s:?}"
-        );
-    }
-
     // Construct via from_bytes — rejects invalid UTF-8.
     let pe = match PathElement::from_bytes(data, cs) {
         Ok(pe) => pe,
@@ -270,6 +259,29 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
 fuzz_target!(|data: &[u8]| {
     if data.len() > 255 {
         return;
+    }
+    if let Ok(s) = core::str::from_utf8(data) {
+        // case_fold_exhaustive() pins every scalar mapping; this verifies that they still compose character-wise.
+        let mut folded_by_character = String::with_capacity(s.len());
+        for c in s.chars() {
+            let mut encoded = [0; 4];
+            folded_by_character.push_str(&case_fold(c.encode_utf8(&mut encoded)));
+        }
+        let folded = case_fold(s);
+        assert_eq!(
+            folded, folded_by_character,
+            "case_fold is not character-wise\n\
+             input: {s:?}"
+        );
+
+        #[cfg(target_vendor = "apple")]
+        if !s.contains('\0') {
+            assert!(
+                apple_compatible_from_normalized_cs(s).is_ok(),
+                "apple_compatible_from_normalized_cs failed\n\
+                 input: {s:?}"
+            );
+        }
     }
     fuzz_normalize(data, CaseSensitivity::Sensitive);
     fuzz_normalize(data, CaseSensitivity::Insensitive);

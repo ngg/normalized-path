@@ -184,6 +184,8 @@
 //! - For each string S containing only assigned characters in a given Unicode
 //!   version, `toCasefold(toNFKC(S))` under that version is identical to
 //!   `toCasefold(toNFKC(S))` under any later version of Unicode.
+//! - The `General_Category` property value `Control` (`Cc`) is immutable:
+//!   the set of code points with that value will never change.
 //!
 //! # `no_std` support
 //!

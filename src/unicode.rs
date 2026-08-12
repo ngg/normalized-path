@@ -62,6 +62,33 @@ pub fn is_assigned(c: char) -> bool {
 
 #[cfg(test)]
 mod tests {
+    //! # Unicode upgrade compatibility
+    //!
+    //! In addition to the stability guarantees documented in the crate-level
+    //! "Unicode version" section, check these requirements when upgrading Unicode:
+    //!
+    //! - `White_Space` membership must not change for previously assigned characters;
+    //!   `white_space_exhaustive()` pins the complete set.
+    //! - `Soft_Dotted` membership must not change for previously assigned characters;
+    //!   `soft_dotted_exhaustive()` pins the complete set.
+    //! - Default full case-fold mappings must not change for previously assigned
+    //!   characters; `case_fold_exhaustive()` pins every non-identity mapping.
+    //! - Case folding must remain character-wise so that the scalar mapping test proves
+    //!   the result for arbitrary strings; `fuzz_path_element` compares whole-string
+    //!   folding with concatenated per-character folding.
+    //! - Case folding must keep every `Soft_Dotted` character as exactly one
+    //!   `Soft_Dotted` character, as required by `fixup_case_fold()`;
+    //!   `case_fold_preserves_soft_dotted()` verifies this invariant.
+    //!
+    //! `above_exhaustive()` and `control_exhaustive()` also pin the CCC=230 and Cc data
+    //! used by the implementation, although their old-character stability is guaranteed
+    //! by Unicode.
+    //!
+    //! Run a sufficiently long `fuzz_path_element` campaign to exercise sequence-dependent
+    //! normalization, combining-mark, and casing invariants. Snapshot failures caused only
+    //! by newly assigned characters are expected updates; changes for previously assigned
+    //! characters mean the Unicode update is incompatible.
+
     use alloc::borrow::Cow;
 
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
@@ -171,6 +198,94 @@ mod tests {
         // lowercase to uppercase for cross-version stability.
         assert_eq!(case_fold("\u{AB70}"), "\u{13A0}"); // ꭰ → Ꭰ
         assert_eq!(case_fold("\u{13A0}"), "\u{13A0}"); // Ꭰ → Ꭰ (unchanged)
+    }
+
+    #[test]
+    fn case_fold_exhaustive() {
+        // The fuzzer verifies that string folding remains character-wise, which lets this scalar test cover all strings.
+        // Complete default full case-folding mappings for Unicode 17.0.0.
+        // C and F are the mappings used by toCasefold(); characters without
+        // one of those entries map to themselves.
+        const CASE_FOLDING: &str = include_str!("CaseFolding.txt");
+
+        assert_eq!(
+            CASE_FOLDING.lines().next(),
+            Some("# CaseFolding-17.0.0.txt")
+        );
+
+        let mut mappings = alloc::collections::BTreeMap::new();
+        for (line_index, line) in CASE_FOLDING.lines().enumerate() {
+            let data = line.split_once('#').map_or(line, |(data, _)| data).trim();
+            if data.is_empty() {
+                continue;
+            }
+
+            let mut fields = data.split(';').map(str::trim);
+            let source = fields
+                .next()
+                .unwrap_or_else(|| panic!("missing source on line {}", line_index + 1));
+            let status = fields
+                .next()
+                .unwrap_or_else(|| panic!("missing status on line {}", line_index + 1));
+            let mapping = fields
+                .next()
+                .unwrap_or_else(|| panic!("missing mapping on line {}", line_index + 1));
+            if !matches!(status, "C" | "F") {
+                continue;
+            }
+
+            let source = u32::from_str_radix(source, 16)
+                .unwrap_or_else(|_| panic!("invalid source on line {}", line_index + 1));
+            let source = char::from_u32(source).unwrap_or_else(|| {
+                panic!("invalid Unicode scalar source on line {}", line_index + 1)
+            });
+            let mut mapped = alloc::string::String::new();
+            for code_point in mapping.split_ascii_whitespace() {
+                let code_point = u32::from_str_radix(code_point, 16)
+                    .unwrap_or_else(|_| panic!("invalid mapping on line {}", line_index + 1));
+                let character = char::from_u32(code_point).unwrap_or_else(|| {
+                    panic!(
+                        "invalid Unicode scalar in mapping on line {}",
+                        line_index + 1
+                    )
+                });
+                mapped.push(character);
+            }
+
+            assert!(
+                mappings.insert(source, mapped).is_none(),
+                "duplicate case-folding source U+{:04X}",
+                source as u32
+            );
+        }
+
+        for &source in mappings.keys() {
+            assert!(
+                is_assigned(source),
+                "case-folding source U+{:04X} is not assigned",
+                source as u32
+            );
+        }
+
+        for cp in 0..=0x10_FFFFu32 {
+            let Some(c) = char::from_u32(cp) else {
+                continue;
+            };
+            if !is_assigned(c) {
+                continue;
+            }
+
+            let mut encoded = [0; 4];
+            let input: &str = c.encode_utf8(&mut encoded);
+            let expected = mappings
+                .get(&c)
+                .map_or(input, alloc::string::String::as_str);
+            assert_eq!(
+                case_fold(input),
+                expected,
+                "unexpected case folding for U+{cp:04X}"
+            );
+        }
     }
 
     #[test]
