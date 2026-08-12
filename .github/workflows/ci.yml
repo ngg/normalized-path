@@ -80,6 +80,18 @@ jobs:
       - run: cargo test
       - run: cargo test --no-default-features
 
+  minimum-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo update -Z minimal-versions --ignore-rust-version
+      - run: cargo build
+      - run: cargo build --no-default-features
+      - run: cargo test
+      - run: cargo test --no-default-features
+
   wasm32-unknown-unknown:
     runs-on: ubuntu-latest
     steps:
