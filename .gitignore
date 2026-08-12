@@ -1,5 +1,6 @@
 /target/
 /vendor/
+/scripts/cache/
 Cargo.lock
 
 AGENTS.md

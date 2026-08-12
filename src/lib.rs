@@ -187,6 +187,12 @@
 //! - The `General_Category` property value `Control` (`Cc`) is immutable:
 //!   the set of code points with that value will never change.
 //!
+//! The last known breaking change relevant to this normalization pipeline was in
+//! Unicode 6.3.0, released in 2013: the `General_Category` of U+180E MONGOLIAN
+//! VOWEL SEPARATOR changed from `Zs` to `Cf`, and related properties including
+//! `Bidi_Class`, `White_Space`, and `Other_Default_Ignorable_Code_Point` were
+//! updated accordingly.
+//!
 //! # `no_std` support
 //!
 //! This crate supports `no_std` environments. Disable the default `std` feature:
