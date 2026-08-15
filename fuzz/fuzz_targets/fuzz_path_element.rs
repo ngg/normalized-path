@@ -167,6 +167,17 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
     }
 
     if cs == CaseSensitivity::Insensitive {
+        // fixup_case_fold() consumes case-folded NFD directly, so case folding must preserve NFD.
+        let folded_nfd_input = case_fold(&nfd_input);
+        assert_eq!(
+            nfd(&folded_nfd_input),
+            folded_nfd_input,
+            "case_fold does not preserve NFD\n\
+             input:       {input:?}\n\
+             nfd input:   {nfd_input:?}\n\
+             folded NFD:  {folded_nfd_input:?}"
+        );
+
         // Post-case-fold fixup is only applied in CI mode.
         check("fixup_case_fold", &fixup_case_fold(input));
 

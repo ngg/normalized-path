@@ -90,6 +90,10 @@ mod tests {
     //!   the complete set.
     //! - Default full case-fold mappings must not change for previously assigned
     //!   characters; `case_fold_exhaustive()` pins every non-identity mapping.
+    //! - Case folding an NFD string must produce another NFD string because
+    //!   `fixup_case_fold()` consumes that output before final NFC composition;
+    //!   `case_fold_preserves_nfd()` exhaustively checks scalar mappings and every
+    //!   distinct adjacent-boundary shape.
     //! - Every language handled specially by Unicode or ICU case mapping must be
     //!   exercised by `fuzz_path_element`.  If its casing behavior is not stable
     //!   under normalization, `fixup_case_fold()` must account for it.
@@ -114,6 +118,8 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
+    use super::CanonicalCombiningClass;
+    use super::CodePointMapData;
     use super::case_fold;
     use super::is_above;
     use super::is_assigned;
@@ -311,6 +317,64 @@ mod tests {
                 expected,
                 "unexpected case folding for U+{cp:04X}"
             );
+        }
+    }
+
+    #[test]
+    fn case_fold_preserves_nfd() {
+        // NFD is a per-scalar decomposition requirement plus a canonical-ordering
+        // requirement at adjacent scalar boundaries. Case folding is character-wise,
+        // so checking every scalar mapping and every distinct boundary shape proves
+        // the property for strings of arbitrary length.
+        let canonical_combining_class = CodePointMapData::<CanonicalCombiningClass>::new();
+        let mut boundary_shapes = alloc::collections::BTreeMap::new();
+
+        for cp in 0..=0x10_FFFFu32 {
+            let Some(c) = char::from_u32(cp) else {
+                continue;
+            };
+            let mut encoded = [0; 4];
+            let input: &str = c.encode_utf8(&mut encoded);
+            if nfd(input) != input {
+                continue;
+            }
+
+            let folded = case_fold(input);
+            assert!(!folded.is_empty(), "U+{cp:04X} folds to an empty string");
+            assert_eq!(
+                nfd(&folded),
+                folded,
+                "case folding NFD scalar U+{cp:04X} does not produce NFD"
+            );
+
+            let first = folded.chars().next().unwrap();
+            let last = folded.chars().next_back().unwrap();
+            boundary_shapes
+                .entry((
+                    canonical_combining_class.get(c),
+                    canonical_combining_class.get(first),
+                    canonical_combining_class.get(last),
+                ))
+                .or_insert(c);
+        }
+
+        for &left in boundary_shapes.values() {
+            for &right in boundary_shapes.values() {
+                let mut input = alloc::string::String::from(left);
+                input.push(right);
+                if nfd(&input) != input {
+                    continue;
+                }
+
+                let folded = case_fold(&input);
+                assert_eq!(
+                    nfd(&folded),
+                    folded,
+                    "case folding NFD boundary U+{:04X} U+{:04X} does not produce NFD",
+                    left as u32,
+                    right as u32
+                );
+            }
         }
     }
 

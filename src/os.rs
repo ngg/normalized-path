@@ -82,17 +82,17 @@ pub fn is_reserved_on_windows(name: &str) -> bool {
 /// Should never panic.
 #[cfg(any(target_os = "windows", test, feature = "__test"))]
 pub fn windows_compatible_from_normalized_cs(s: &str) -> Cow<'_, str> {
-    // Step 1: Map forbidden characters
+    // Map forbidden characters.
     let mut result = cow(s.chars().map(map_windows_forbidden), s);
 
-    // Step 2: Handle trailing dot
+    // Handle a trailing dot.
     if result.ends_with('.') {
         let owned = result.to_mut();
         owned.pop();
         owned.push('\u{FF0E}');
     }
 
-    // Step 3: Handle reserved names
+    // Handle reserved names.
     if is_reserved_on_windows(&result) {
         let mut owned = result.into_owned();
         let first = owned.as_bytes()[0];

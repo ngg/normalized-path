@@ -11,23 +11,24 @@
 //!
 //! - The normalization procedure is identical on every platform -- the same input
 //!   always produces the same normalized bytes regardless of the host OS.
-//! - If any supported OS considers two names equivalent (e.g. NFC vs NFD on macOS),
-//!   they must normalize to the same value.
+//! - In case-sensitive mode, if any supported OS considers two names equivalent on a
+//!   case-sensitive filesystem (e.g. NFC vs NFD on macOS), they normalize to the same
+//!   value.  In case-insensitive mode, if any supported OS considers two names
+//!   equivalent on either a case-sensitive or case-insensitive filesystem, they
+//!   normalize to the same value.
 //! - The normalized form is always in NFC (Unicode Normalization Form C), the
 //!   most widely used and compact canonical form.
 //! - Normalization is idempotent: normalizing an already-normalized name always
 //!   produces the same name unchanged.
 //! - The OS-compatible form of a name, when normalized again, produces the same
 //!   normalized value as the original input (round-trip stability).
-//! - Every valid name is representable on every supported OS.  Characters that
-//!   would be rejected or silently altered (Windows forbidden characters) are
-//!   mapped to visually similar safe alternatives.
-//! - If the OS automatically transforms a name (e.g. NFC↔NFD conversion,
-//!   truncation at null bytes), normalizing the transformed name produces the
-//!   same result as normalizing the original.
+//! - Subject to OS restrictions that this crate does not handle (see the non-goals
+//!   below), every valid name is representable on every supported OS.  Characters
+//!   that Windows would reject or silently alter are mapped to visually similar safe
+//!   alternatives.
 //! - In case-insensitive mode, names differing only in case normalize identically,
-//!   including edge cases from Turkish/Azerbaijani and Lithuanian casing rules
-//!   (see step 8 below).
+//!   including edge cases from Armenian, Azerbaijani, Dutch, Greek, Lithuanian, and
+//!   Turkish casing rules (see [Normalization pipeline](#normalization-pipeline)).
 //!
 //! **Non-goals:**
 //!
@@ -52,12 +53,12 @@
 //! - In case-insensitive mode, Turkish İ (U+0130), dotless ı (U+0131), and
 //!   ASCII I/i are all deliberately normalized to the same form.  Users who
 //!   need to distinguish them cannot use case-insensitive mode.
-//! - In case-insensitive mode, Armenian U+0587 (և), U+0565 (ե) followed by
-//!   U+0582 (ւ), and U+0565 (ե) followed by U+057E (վ) are deliberately
-//!   normalized to the same form.
+//! - In case-insensitive mode, Armenian U+0587 (և), the letter Yew, is deliberately
+//!   normalized to the same form as both U+0565 (ե) followed by U+0582 (ւ) and
+//!   U+0565 (ե) followed by U+057E (վ).
 //! - In case-insensitive mode, the Greek diacritics and dialytika distinctions
-//!   listed in step 8 are deliberately discarded.  Users who need to preserve
-//!   those distinctions cannot use case-insensitive mode.
+//!   listed under **Greek mark removal** are deliberately discarded.  Users who
+//!   need to preserve those distinctions cannot use case-insensitive mode.
 //! - Invalid UTF-8 byte sequences in `from_bytes`/`from_os_str` are rejected.
 //! - Names containing unassigned Unicode code points are rejected.  This makes it
 //!   much more likely that normalization results for accepted names remain stable
@@ -83,7 +84,7 @@
 //!    ensures combining marks are in canonical order before subsequent steps.
 //!
 //! 2. **Whitespace trimming** -- strips leading and trailing characters with the Unicode
-//!    `White_Space` property (excluding control characters, which are rejected in step 4).
+//!    `White_Space` property (excluding control characters, which validation rejects).
 //!    Many applications strip leading/trailing whitespace silently.
 //!
 //! 3. **Fullwidth-to-ASCII mapping** -- maps fullwidth forms (U+FF01--U+FF5E) to their
@@ -97,64 +98,55 @@
 //!    cannot be used as regular names.  Control characters are invisible, can break
 //!    terminals and tools, and some OSes reject or silently drop them.  Unassigned
 //!    characters are rejected to ensure normalization stability across Unicode
-//!    versions (see [Unicode stability policies](#unicode-stability-policies)).
+//!    versions (see [Unicode version](#unicode-version)).
 //!
-//! 5. **NFC composition** -- canonical composition to produce the shortest equivalent
-//!    form.
+//! 5. **NFC composition** -- canonical composition to produce the compact, standard form.
 //!
-//! In **case-insensitive** mode, four additional steps are applied after the above:
+//! In **case-insensitive** mode, additional steps are applied after the above:
 //!
-//! 6. **NFD decomposition** (again, on the NFC result).  Steps 6, 7, and 9
-//!    implement the Unicode canonical caseless matching algorithm (Definition D145):
+//! 6. **Unicode canonical caseless mapping** -- computes
+//!    `NFD(toCasefold(NFD(X)))`, using locale-independent full case folding.  This
+//!    is the mapping used by the Unicode canonical caseless matching algorithm
+//!    (Definition D145):
 //!    *"A string X is a canonical caseless match for a string Y if and only if:
-//!    NFD(toCasefold(NFD(X))) = NFD(toCasefold(NFD(Y)))"*.  Step 8 extends this
-//!    with a post-case-fold fixup for Greek, Turkish/Azerbaijani,
-//!    Lithuanian, and Armenian casing.
+//!    NFD(toCasefold(NFD(X))) = NFD(toCasefold(NFD(Y)))"*.  For Unicode 17.0.0,
+//!    `toCasefold(NFD(X))` is already in NFD, so the implementation skips the
+//!    outer NFD as a no-op.
 //!
-//! 7. **Unicode `toCasefold()`** -- locale-independent full case folding.
+//! 7. **Greek mark removal** -- remove U+0300, U+0301, U+0302, U+0303, U+0304,
+//!    U+0306, U+0308, U+0311, U+0313, U+0314, U+0342, U+0343, and U+0344 when
+//!    the nearest preceding starter is a Greek letter.  Other intervening
+//!    nonstarters are preserved and do not prevent removal.  A Greek letter is
+//!    a character whose Unicode `Script` property is `Greek` and whose
+//!    `General_Category` is a letter category.  This reconciles ICU Greek
+//!    uppercasing, which removes Greek accent, breathing, and length marks and
+//!    conditionally preserves or adds dialytika.
 //!
-//! 8. **Post-case-fold fixup** -- applies additional mappings needed to
-//!    keep the normalized form stable under locale-independent and
-//!    locale-specific casing:
-//!    - removes U+0300, U+0301, U+0302, U+0303, U+0304, U+0306, U+0308,
-//!      U+0311, U+0313, U+0314, U+0342, U+0343, and U+0344 when the nearest
-//!      preceding starter is a Greek letter.  Other intervening nonstarters are
-//!      preserved and do not prevent removal.  A Greek letter is a character
-//!      whose Unicode `Script` property is `Greek` and whose `General_Category`
-//!      is a letter category;
-//!    - maps U+0131 (ı) to ASCII i;
-//!    - strips U+0307 COMBINING DOT ABOVE after any `Soft_Dotted` character
-//!      (e.g. i, j, Cyrillic і/ј), unless an intervening starter or CCC=230
-//!      Above combiner blocks it (matching the Unicode `After_Soft_Dotted`
-//!      condition).  Because the Greek marks above are removed first, such a
-//!      mark does not block U+0307 removal even when its canonical combining
-//!      class is 230 (Above);
-//!    - maps Armenian U+057E (վ) to U+0582 (ւ) when it immediately follows
-//!      U+0565 (ե).
+//! 8. **Dotless-i mapping** -- map U+0131 (ı) to ASCII i.  `toCasefold()` treats
+//!    ı as distinct from i (ı folds to itself), yet `toUppercase(ı)` = I even
+//!    without locale tailoring, and I folds back to i, creating a collision.
 //!
-//!    These mappings close gaps that `toCasefold()` alone leaves:
-//!    - **Greek uppercasing:** ICU Greek uppercasing removes Greek accent,
-//!      breathing, and length marks, and conditionally preserves or adds
-//!      dialytika.  Normalization removes each mark listed above when its nearest
-//!      preceding starter is a Greek letter.
-//!    - **Dotless ı (U+0131):** `toCasefold()` treats ı as distinct from i
-//!      (ı folds to itself), yet `toUppercase(ı)` = I even without locale
-//!      tailoring, and I folds back to i -- creating a collision.
-//!    - **Lithuanian casing rules:** when lowercasing I/J/Į with additional accents above,
-//!      Lithuanian rules insert U+0307 to retain the visual dot (e.g.
-//!      `lt_lowercase("J\u{0301}")` = `j\u{0307}\u{0301}`).  Conversely,
-//!      Lithuanian upper/titlecase removes U+0307 after soft-dotted characters
-//!      (e.g. `lt_uppercase("j\u{0307}")` = `J`).  Stripping U+0307 after
-//!      soft-dotted characters ensures stability under both directions.
-//!    - **Armenian ech-yiwn ligature U+0587 (և):** case-folding it produces
-//!      U+0565 (ե) followed by U+0582 (ւ).  ICU root upper/title casing produces
-//!      `ԵՒ`/`Եւ`, which also fold to that sequence.  ICU Armenian upper/title
-//!      casing instead produces `ԵՎ`/`Եվ`, which fold to U+0565 (ե) followed by
-//!      U+057E (վ).  The contextual replacement above makes all of these forms
-//!      normalize identically.
+//! 9. **Soft-dotted dot removal** -- strip U+0307 COMBINING DOT ABOVE after any
+//!    `Soft_Dotted` character (e.g. i, j, Cyrillic і/ј), unless an intervening
+//!    starter or CCC=230 Above combiner blocks it (matching the Unicode
+//!    `After_Soft_Dotted` condition).  Because the Greek marks above are removed
+//!    first, such a mark does not block U+0307 removal even when its canonical
+//!    combining class is 230 (Above).  Lithuanian lowercasing inserts U+0307
+//!    after I/J/Į when more accents are above (e.g.
+//!    `lt_lowercase("J\u{0301}")` = `j\u{0307}\u{0301}`), while Lithuanian
+//!    upper/titlecase removes U+0307 after soft-dotted characters (e.g.
+//!    `lt_uppercase("j\u{0307}")` = `J`).  Stripping U+0307 after soft-dotted
+//!    characters ensures stability under both directions.
 //!
-//! 9. **NFC composition** (final) -- recompose after case folding to produce the
-//!    canonical NFC output.
+//! 10. **Armenian Yew mapping** -- map Armenian U+057E (վ) to U+0582 (ւ) when
+//!     it immediately follows U+0565 (ե).  Case-folding Armenian U+0587 (և),
+//!     the letter Yew, produces U+0565 (ե) followed by U+0582 (ւ).  ICU root
+//!     upper/title casing produces `ԵՒ`/`Եւ`, which also fold to that sequence.
+//!     ICU Armenian upper/title casing instead produces `ԵՎ`/`Եվ`, which fold
+//!     to U+0565 (ե) followed by U+057E (վ).  The contextual replacement makes
+//!     all of these forms normalize identically.
+//!
+//! 11. **NFC composition** -- canonical composition to produce the compact, standard form.
 //!
 //! # OS compatibility mapping
 //!
@@ -169,7 +161,7 @@
 //!   forbidden characters (`< > : " \ | ? *`), the final trailing dot, and the first
 //!   character of reserved device names (CON, PRN, AUX, NUL, COM0--COM9, LPT0--LPT9,
 //!   and their superscript-digit variants).
-//! - **Apple (macOS/iOS)**: converted using [`CFStringGetFileSystemRepresentation`](https://developer.apple.com/documentation/corefoundation/cfstringgetfilesystemrepresentation(_:_:_:))
+//! - **Apple platforms**: converted using [`CFStringGetFileSystemRepresentation`](https://developer.apple.com/documentation/corefoundation/cfstringgetfilesystemrepresentation(_:_:_:))
 //!   as recommended by Apple's documentation (produces a representation similar to NFD).
 //! - **Other platforms**: the OS-compatible form is identical to the case-sensitive
 //!   normalized form.
@@ -301,8 +293,10 @@
 //! assert_eq!(tree.len(), 1);
 //! ```
 //!
-//! The runtime-dynamic [`PathElement`] works in ordered collections too, but
-//! comparing or ordering elements with **different** case sensitivities will panic:
+//! The runtime-dynamic [`PathElement`] works in ordered collections too.  Elements in
+//! one collection must use the same case sensitivity: equality comparisons and total
+//! ordering ([`Ord`]) panic when sensitivities differ, while
+//! [`PartialOrd::partial_cmp()`] returns `None`.
 //!
 //! ```
 //! # use std::collections::BTreeSet;

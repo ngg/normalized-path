@@ -29,9 +29,9 @@ pub fn map_fullwidth(s: &str) -> Cow<'_, str> {
 /// Post-case-fold fixup for casing inconsistencies.
 /// Applied after `toCasefold()` in case-insensitive mode.
 ///
-/// - Removes the Greek combining marks specified in step 8 of the crate-level
-///   normalization pipeline from canonical combining sequences headed by a
-///   Greek letter.
+/// - Removes the Greek combining marks specified under **Greek mark removal**
+///   in the crate-level normalization pipeline from canonical combining sequences
+///   headed by a Greek letter.
 /// - Maps dotless ı (U+0131) to ASCII i.
 ///   `toCasefold()` treats ı as distinct from i, yet `toUppercase(ı)` = I
 ///   even without locale tailoring, creating collisions that folding alone misses.
@@ -46,8 +46,9 @@ pub fn map_fullwidth(s: &str) -> Cow<'_, str> {
 ///   removes U+0307 after soft-dotted characters
 ///   (e.g. `lt_uppercase("j\u{0307}")` = `J`).
 /// - Maps Armenian U+057E (վ) to U+0582 (ւ) when it immediately follows
-///   U+0565 (ե).  ICU Armenian upper/title casing maps U+0587 (և) to ԵՎ/Եվ,
-///   while Unicode case folding and root casing use the ECH + YIWN sequence.
+///   U+0565 (ե).  ICU Armenian upper/title casing maps Armenian U+0587 (և),
+///   the letter Yew, to ԵՎ/Եվ, while Unicode case folding and root casing use
+///   the ECH + YIWN sequence.
 ///
 /// Note: this function relies on the invariant that `toCasefold()` preserves
 /// the `Soft_Dotted` property — every `Soft_Dotted` character either folds to
@@ -102,7 +103,7 @@ pub fn fixup_case_fold(s: &str) -> Cow<'_, str> {
             .scan(false, |after_armenian_ech, c| {
                 let mapped = if *after_armenian_ech && c == '\u{057E}' {
                     // Armenian ե + վ → ե + ւ. This reconciles ICU's
-                    // Armenian casing of և with its default case fold.
+                    // Armenian casing of Yew (և) with its default case fold.
                     '\u{0582}'
                 } else {
                     c
@@ -323,7 +324,7 @@ mod tests {
         assert_eq!(result, "i\u{0301}\u{0307}");
     }
 
-    // --- fixup_case_fold: Armenian ech-yiwn ---
+    // --- fixup_case_fold: Armenian Yew ---
 
     #[test]
     fn fixup_case_fold_armenian_ech_vew() {
@@ -805,10 +806,10 @@ mod tests {
     }
 
     #[test]
-    fn ci_from_cs_armenian_ech_yiwn() {
+    fn ci_from_cs_armenian_yew() {
         let expected = "\u{0565}\u{0582}";
         for input in [
-            "\u{0587}",         // և: ligature
+            "\u{0587}",         // և: Yew
             "\u{0565}\u{0582}", // եւ: default folded form
             "\u{0565}\u{057E}", // եվ: Armenian folded form
             "\u{0535}\u{0552}", // ԵՒ: root uppercase
