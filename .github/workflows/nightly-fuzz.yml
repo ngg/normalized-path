@@ -2,7 +2,7 @@ name: Nightly fuzz
 
 on:
   schedule:
-    - cron: "21 4 * * *"
+    - cron: "21 1 * * *"
   workflow_dispatch:
 
 permissions:
