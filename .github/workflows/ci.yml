@@ -66,6 +66,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: true
+          key: ${{ matrix.name }}
       - run: cargo update ${{ env.MINIMAL_VERSIONS_ARG }} ${{ env.IGNORE_RUST_VERSION_ARG }}
       - if: matrix.target != ''
         run: rustup target add ${{ matrix.target }}
