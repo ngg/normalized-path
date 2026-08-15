@@ -29,12 +29,17 @@ pub fn map_fullwidth(s: &str) -> Cow<'_, str> {
 /// Post-case-fold fixup for casing inconsistencies.
 /// Applied after `toCasefold()` in case-insensitive mode.
 ///
+/// - Removes the Greek combining marks specified in step 8 of the crate-level
+///   normalization pipeline from canonical combining sequences headed by a
+///   Greek letter.
 /// - Maps dotless ı (U+0131) to ASCII i.
 ///   `toCasefold()` treats ı as distinct from i, yet `toUppercase(ı)` = I
 ///   even without locale tailoring, creating collisions that folding alone misses.
 /// - Strips U+0307 COMBINING DOT ABOVE after any `Soft_Dotted` character
 ///   (e.g. i, j, Cyrillic і/ј), blocked by intervening starters or CCC=230
 ///   Above combiners (matching the Unicode `After_Soft_Dotted` condition).
+///   Because Greek combining marks are removed first, such a mark does not
+///   block this stripping even if its canonical combining class is 230 (Above).
 ///   This handles the `i\u{0307}` output from `toCasefold(İ)` and Lithuanian
 ///   casing rules: lowercase adds U+0307 after I/J/Į when more accents are above
 ///   (e.g. `lt_lowercase("J\u{0301}")` = `j\u{0307}\u{0301}`), and upper/titlecase
@@ -43,9 +48,6 @@ pub fn map_fullwidth(s: &str) -> Cow<'_, str> {
 /// - Maps Armenian U+057E (վ) to U+0582 (ւ) when it immediately follows
 ///   U+0565 (ե).  ICU Armenian upper/title casing maps U+0587 (և) to ԵՎ/Եվ,
 ///   while Unicode case folding and root casing use the ECH + YIWN sequence.
-/// - Removes the Greek combining marks specified in step 8 of the crate-level
-///   normalization pipeline from canonical combining sequences headed by a
-///   Greek letter.
 ///
 /// Note: this function relies on the invariant that `toCasefold()` preserves
 /// the `Soft_Dotted` property — every `Soft_Dotted` character either folds to
@@ -59,6 +61,17 @@ pub fn map_fullwidth(s: &str) -> Cow<'_, str> {
 pub fn fixup_case_fold(s: &str) -> Cow<'_, str> {
     cow(
         s.chars()
+            .scan(false, |greek_starter, c| {
+                if *greek_starter && is_removed_greek_mark(c) {
+                    return Some(None);
+                }
+
+                if is_starter(c) {
+                    *greek_starter = is_greek_letter(c);
+                }
+                Some(Some(c))
+            })
+            .flatten()
             .scan(false, |strip_dot_above, c| {
                 Some(match c {
                     '\u{0131}' => {
@@ -96,18 +109,7 @@ pub fn fixup_case_fold(s: &str) -> Cow<'_, str> {
                 };
                 *after_armenian_ech = mapped == '\u{0565}';
                 Some(mapped)
-            })
-            .scan(false, |greek_starter, c| {
-                if *greek_starter && is_removed_greek_mark(c) {
-                    return Some(None);
-                }
-
-                if is_starter(c) {
-                    *greek_starter = is_greek_letter(c);
-                }
-                Some(Some(c))
-            })
-            .flatten(),
+            }),
         s,
     )
 }
@@ -402,6 +404,14 @@ mod tests {
         assert_eq!(
             fixup_case_fold("\u{03B1}\u{05C7}\u{03C5}\u{0308}"),
             "\u{03B1}\u{05C7}\u{03C5}"
+        );
+    }
+
+    #[test]
+    fn fixup_case_fold_removed_greek_above_does_not_block_dot_stripping() {
+        assert_eq!(
+            fixup_case_fold("\u{03F3}\u{0347}\u{0308}\u{0301}\u{0307}"),
+            "\u{03F3}\u{0347}"
         );
     }
 
@@ -878,6 +888,22 @@ mod tests {
             normalize_ci_from_normalized_cs("\u{03F3}\u{0307}"),
             "\u{03F3}"
         );
+    }
+
+    #[test]
+    fn ci_from_cs_removed_greek_above_does_not_block_dot_stripping() {
+        let expected = "\u{03F3}\u{0347}\u{0375}";
+        for input in [
+            "\u{037F}\u{0344}\u{0347}\u{0307}\u{0375}",
+            "\u{037F}\u{0347}\u{0307}\u{0375}",
+        ] {
+            let cs = normalize_cs(input).unwrap();
+            assert_eq!(
+                normalize_ci_from_normalized_cs(&cs),
+                expected,
+                "input: {input:?}"
+            );
+        }
     }
 
     #[test]
