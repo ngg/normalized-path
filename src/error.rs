@@ -132,7 +132,8 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{Error, ErrorKind};
+    use super::Error;
+    use super::ErrorKind;
 
     #[test]
     fn error_kind_display() {

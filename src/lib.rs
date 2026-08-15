@@ -333,20 +333,32 @@ mod path_element;
 mod unicode;
 mod utils;
 
-pub use case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
-pub use error::{Error, ErrorKind, Result};
-pub use path_element::{PathElement, PathElementCI, PathElementCS, PathElementGeneric};
+pub use case_sensitivity::CaseInsensitive;
+pub use case_sensitivity::CaseSensitive;
+pub use case_sensitivity::CaseSensitivity;
+pub use error::Error;
+pub use error::ErrorKind;
+pub use error::Result;
+pub use path_element::PathElement;
+pub use path_element::PathElementCI;
+pub use path_element::PathElementCS;
+pub use path_element::PathElementGeneric;
 
 #[cfg(any(feature = "__test", test))]
 pub mod test_helpers {
     pub use crate::error::ResultKind;
-    pub use crate::normalize::{
-        fixup_case_fold, map_fullwidth, normalize_ci_from_normalized_cs, normalize_cs,
-        validate_path_element,
-    };
-    pub use crate::os::{
-        apple_compatible_from_normalized_cs, apple_compatible_from_normalized_cs_fallback,
-        is_reserved_on_windows, windows_compatible_from_normalized_cs,
-    };
-    pub use crate::unicode::{case_fold, is_starter, is_whitespace, nfc, nfd};
+    pub use crate::normalize::fixup_case_fold;
+    pub use crate::normalize::map_fullwidth;
+    pub use crate::normalize::normalize_ci_from_normalized_cs;
+    pub use crate::normalize::normalize_cs;
+    pub use crate::normalize::validate_path_element;
+    pub use crate::os::apple_compatible_from_normalized_cs;
+    pub use crate::os::apple_compatible_from_normalized_cs_fallback;
+    pub use crate::os::is_reserved_on_windows;
+    pub use crate::os::windows_compatible_from_normalized_cs;
+    pub use crate::unicode::case_fold;
+    pub use crate::unicode::is_starter;
+    pub use crate::unicode::is_whitespace;
+    pub use crate::unicode::nfc;
+    pub use crate::unicode::nfd;
 }

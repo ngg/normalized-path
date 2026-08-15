@@ -61,7 +61,9 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{CaseInsensitive, CaseSensitive, CaseSensitivity};
+    use super::CaseInsensitive;
+    use super::CaseSensitive;
+    use super::CaseSensitivity;
 
     #[test]
     fn from_case_sensitive() {

@@ -2,10 +2,16 @@ use alloc::borrow::Cow;
 
 use crate::ErrorKind;
 use crate::error::ResultKind;
-use crate::unicode::{
-    case_fold, is_above, is_assigned, is_control, is_greek_letter, is_soft_dotted, is_starter,
-    is_whitespace, nfc, nfd,
-};
+use crate::unicode::case_fold;
+use crate::unicode::is_above;
+use crate::unicode::is_assigned;
+use crate::unicode::is_control;
+use crate::unicode::is_greek_letter;
+use crate::unicode::is_soft_dotted;
+use crate::unicode::is_starter;
+use crate::unicode::is_whitespace;
+use crate::unicode::nfc;
+use crate::unicode::nfd;
 use crate::utils::cow;
 
 /// Map Fullwidth characters (U+FF01..U+FF5E) to their ASCII equivalents.
@@ -192,10 +198,12 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{
-        fixup_case_fold, is_removed_greek_mark, map_fullwidth, normalize_ci_from_normalized_cs,
-        normalize_cs, validate_path_element,
-    };
+    use super::fixup_case_fold;
+    use super::is_removed_greek_mark;
+    use super::map_fullwidth;
+    use super::normalize_ci_from_normalized_cs;
+    use super::normalize_cs;
+    use super::validate_path_element;
     use crate::ErrorKind;
     use crate::unicode::is_starter;
 

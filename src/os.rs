@@ -189,11 +189,12 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{
-        apple_compatible_from_normalized_cs, is_reserved_on_windows,
-        os_compatible_from_normalized_cs, windows_compatible_from_normalized_cs,
-    };
-    use crate::unicode::{case_fold, nfd};
+    use super::apple_compatible_from_normalized_cs;
+    use super::is_reserved_on_windows;
+    use super::os_compatible_from_normalized_cs;
+    use super::windows_compatible_from_normalized_cs;
+    use crate::unicode::case_fold;
+    use crate::unicode::nfd;
 
     // --- windows_compatible_from_normalized_cs ---
 

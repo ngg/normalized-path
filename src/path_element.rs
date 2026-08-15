@@ -1,12 +1,18 @@
 use alloc::borrow::Cow;
 use alloc::string::String;
 #[cfg(feature = "std")]
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
+#[cfg(feature = "std")]
+use std::ffi::OsString;
 
 use crate::Result;
-use crate::case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
-use crate::error::{Error, ErrorKind};
-use crate::normalize::{normalize_ci_from_normalized_cs, normalize_cs};
+use crate::case_sensitivity::CaseInsensitive;
+use crate::case_sensitivity::CaseSensitive;
+use crate::case_sensitivity::CaseSensitivity;
+use crate::error::Error;
+use crate::error::ErrorKind;
+use crate::normalize::normalize_ci_from_normalized_cs;
+use crate::normalize::normalize_cs;
 use crate::os::os_compatible_from_normalized_cs;
 use crate::utils::SubstringOrOwned;
 
@@ -759,10 +765,15 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{PathElement, PathElementCI, PathElementCS};
+    use super::PathElement;
+    use super::PathElementCI;
+    use super::PathElementCS;
     use crate::ErrorKind;
-    use crate::case_sensitivity::{CaseInsensitive, CaseSensitive, CaseSensitivity};
-    use crate::normalize::{normalize_ci_from_normalized_cs, normalize_cs};
+    use crate::case_sensitivity::CaseInsensitive;
+    use crate::case_sensitivity::CaseSensitive;
+    use crate::case_sensitivity::CaseSensitivity;
+    use crate::normalize::normalize_ci_from_normalized_cs;
+    use crate::normalize::normalize_cs;
     use crate::os::os_compatible_from_normalized_cs;
 
     // --- PathElement ---
@@ -1624,14 +1635,18 @@ mod tests {
 #[cfg(all(test, feature = "std"))]
 mod os_str_tests {
     use std::borrow::Cow;
-    use std::ffi::{OsStr, OsString};
+    use std::ffi::OsStr;
+    use std::ffi::OsString;
 
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use crate::ErrorKind;
-    use crate::case_sensitivity::{CaseInsensitive, CaseSensitivity};
-    use crate::path_element::{PathElement, PathElementCI, PathElementCS};
+    use crate::case_sensitivity::CaseInsensitive;
+    use crate::case_sensitivity::CaseSensitivity;
+    use crate::path_element::PathElement;
+    use crate::path_element::PathElementCI;
+    use crate::path_element::PathElementCS;
 
     #[test]
     fn from_os_str_borrowed_matches_new() {

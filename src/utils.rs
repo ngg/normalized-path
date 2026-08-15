@@ -1,4 +1,5 @@
-use alloc::borrow::{Cow, ToOwned};
+use alloc::borrow::Cow;
+use alloc::borrow::ToOwned;
 use alloc::string::String;
 
 /// Compare `original` char-by-char against `converted`; return `Cow::Borrowed` when:
@@ -109,7 +110,8 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{SubstringOrOwned, cow};
+    use super::SubstringOrOwned;
+    use super::cow;
 
     // --- cow ---
 

@@ -1,17 +1,28 @@
 #![no_main]
 
-use icu_casemap::options::{LeadingAdjustment, TitlecaseOptions, TrailingCase};
-use icu_casemap::{CaseMapper, TitlecaseMapper};
+use icu_casemap::CaseMapper;
+use icu_casemap::TitlecaseMapper;
+use icu_casemap::options::LeadingAdjustment;
+use icu_casemap::options::TitlecaseOptions;
+use icu_casemap::options::TrailingCase;
 use icu_locale_core::langid;
 use libfuzzer_sys::fuzz_target;
+use normalized_path::CaseSensitivity;
+use normalized_path::PathElement;
+use normalized_path::test_helpers::apple_compatible_from_normalized_cs;
 #[cfg(target_vendor = "apple")]
 use normalized_path::test_helpers::apple_compatible_from_normalized_cs_fallback;
-use normalized_path::test_helpers::{
-    apple_compatible_from_normalized_cs, case_fold, fixup_case_fold, is_reserved_on_windows,
-    is_whitespace, map_fullwidth, nfc, nfd, normalize_ci_from_normalized_cs, normalize_cs,
-    validate_path_element, windows_compatible_from_normalized_cs,
-};
-use normalized_path::{CaseSensitivity, PathElement};
+use normalized_path::test_helpers::case_fold;
+use normalized_path::test_helpers::fixup_case_fold;
+use normalized_path::test_helpers::is_reserved_on_windows;
+use normalized_path::test_helpers::is_whitespace;
+use normalized_path::test_helpers::map_fullwidth;
+use normalized_path::test_helpers::nfc;
+use normalized_path::test_helpers::nfd;
+use normalized_path::test_helpers::normalize_ci_from_normalized_cs;
+use normalized_path::test_helpers::normalize_cs;
+use normalized_path::test_helpers::validate_path_element;
+use normalized_path::test_helpers::windows_compatible_from_normalized_cs;
 
 /// Reverse of `map_fullwidth`: map ASCII printable characters to their fullwidth equivalents.
 fn unmap_fullwidth(s: &str) -> String {

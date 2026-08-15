@@ -1,11 +1,16 @@
 use alloc::borrow::Cow;
 
 use icu_casemap::CaseMapper;
-use icu_normalizer::{ComposingNormalizer, DecomposingNormalizer};
-use icu_properties::props::{
-    CanonicalCombiningClass, GeneralCategory, GeneralCategoryGroup, Script, SoftDotted, WhiteSpace,
-};
-use icu_properties::{CodePointMapData, CodePointSetData};
+use icu_normalizer::ComposingNormalizer;
+use icu_normalizer::DecomposingNormalizer;
+use icu_properties::CodePointMapData;
+use icu_properties::CodePointSetData;
+use icu_properties::props::CanonicalCombiningClass;
+use icu_properties::props::GeneralCategory;
+use icu_properties::props::GeneralCategoryGroup;
+use icu_properties::props::Script;
+use icu_properties::props::SoftDotted;
+use icu_properties::props::WhiteSpace;
 
 /// NFD normalization (canonical decomposition).
 #[must_use]
@@ -109,10 +114,16 @@ mod tests {
     #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{
-        case_fold, is_above, is_assigned, is_control, is_greek_letter, is_soft_dotted, is_starter,
-        is_whitespace, nfc, nfd,
-    };
+    use super::case_fold;
+    use super::is_above;
+    use super::is_assigned;
+    use super::is_control;
+    use super::is_greek_letter;
+    use super::is_soft_dotted;
+    use super::is_starter;
+    use super::is_whitespace;
+    use super::nfc;
+    use super::nfd;
 
     // --- nfd / nfc ---
 
