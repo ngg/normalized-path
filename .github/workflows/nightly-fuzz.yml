@@ -17,14 +17,12 @@ jobs:
       fork: 3
 
   fuzz-windows:
-    needs: fuzz-macos
     uses: ./.github/workflows/fuzz.yml
     with:
       runs-on: windows-latest
       timeout: 600
 
   fuzz-linux:
-    needs: fuzz-windows
     uses: ./.github/workflows/fuzz.yml
     with:
       runs-on: ubuntu-latest

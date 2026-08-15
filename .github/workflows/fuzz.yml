@@ -35,6 +35,9 @@ env:
 
 jobs:
   fuzz:
+    concurrency:
+      group: normalized-path-fuzz
+      queue: max
     runs-on: ${{ inputs.runs-on }}
     steps:
       - uses: actions/checkout@v6
