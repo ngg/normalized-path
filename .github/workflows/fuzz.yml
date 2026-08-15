@@ -8,14 +8,14 @@ on:
         required: true
       timeout:
         type: number
-        default: 60
+        default: 180
       fork:
         type: number
         default: 4
   workflow_dispatch:
     inputs:
       runs-on:
-        description: "Runner (e.g. ubuntu-latest, macos-latest)"
+        description: "Runner (e.g. ubuntu-latest, macos-latest, macos-26-intel, windows-latest)"
         type: string
         default: ubuntu-latest
       timeout:
@@ -23,7 +23,7 @@ on:
         type: number
         default: 60
       fork:
-        description: "Parallel fuzz processes (-fork=N). macOS has 3 CPUs, linux/win 4. See https://docs.github.com/en/actions/reference/runners/github-hosted-runners"
+        description: "Parallel fuzz processes (-fork=N). ARM-based macOS has 3 CPUs; Intel-based macOS, Linux, and Windows have 4. See https://docs.github.com/en/actions/reference/runners/github-hosted-runners"
         type: number
         default: 4
 

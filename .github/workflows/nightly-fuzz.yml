@@ -9,21 +9,26 @@ permissions:
   contents: read
 
 jobs:
-  fuzz-macos:
+  fuzz:
+    name: fuzz-${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos
+            runner: macos-latest
+            fork: 3
+          - name: macos-intel
+            runner: macos-26-intel
+            fork: 4
+          - name: windows
+            runner: windows-latest
+            fork: 4
+          - name: linux
+            runner: ubuntu-latest
+            fork: 4
     uses: ./.github/workflows/fuzz.yml
     with:
-      runs-on: macos-latest
+      runs-on: ${{ matrix.runner }}
       timeout: 600
-      fork: 3
-
-  fuzz-windows:
-    uses: ./.github/workflows/fuzz.yml
-    with:
-      runs-on: windows-latest
-      timeout: 600
-
-  fuzz-linux:
-    uses: ./.github/workflows/fuzz.yml
-    with:
-      runs-on: ubuntu-latest
-      timeout: 600
+      fork: ${{ matrix.fork }}

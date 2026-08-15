@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, macos-26-intel, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -128,18 +128,25 @@ jobs:
       - run: cargo build --target wasm32-wasip1
       - run: cargo test --target wasm32-wasip1
 
-  fuzz-macos:
+  fuzz:
+    name: fuzz-${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos
+            runner: macos-latest
+            fork: 3
+          - name: macos-intel
+            runner: macos-26-intel
+            fork: 4
+          - name: windows
+            runner: windows-latest
+            fork: 4
+          - name: linux
+            runner: ubuntu-latest
+            fork: 4
     uses: ./.github/workflows/fuzz.yml
     with:
-      runs-on: macos-latest
-      fork: 3
-
-  fuzz-windows:
-    uses: ./.github/workflows/fuzz.yml
-    with:
-      runs-on: windows-latest
-
-  fuzz-linux:
-    uses: ./.github/workflows/fuzz.yml
-    with:
-      runs-on: ubuntu-latest
+      runs-on: ${{ matrix.runner }}
+      fork: ${{ matrix.fork }}
