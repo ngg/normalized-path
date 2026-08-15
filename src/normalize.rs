@@ -935,6 +935,41 @@ mod tests {
     }
 
     #[test]
+    fn ci_from_cs_final_sigma_with_ypogegrammeni_contexts() {
+        for (uppercase, lowercase) in [
+            ("\u{0345}\u{03A3}", "\u{0345}\u{03C3}"),
+            ("\u{0391}\u{0345}\u{03A3}", "\u{03B1}\u{0345}\u{03C2}"),
+            ("\u{0391}\u{03A3}\u{0345}", "\u{03B1}\u{03C2}\u{0345}"),
+            (
+                "\u{0391}\u{03A3}\u{0345}\u{0391}",
+                "\u{03B1}\u{03C3}\u{0345}\u{03B1}",
+            ),
+        ] {
+            let uppercase = normalize_cs(uppercase).unwrap();
+            let lowercase = normalize_cs(lowercase).unwrap();
+            assert_eq!(
+                normalize_ci_from_normalized_cs(&uppercase),
+                normalize_ci_from_normalized_cs(&lowercase),
+                "uppercase: {uppercase:?}, lowercase: {lowercase:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ci_from_cs_casing_induced_noncanonical_order() {
+        // Unicode Standard Table 5-5: U+01F0 LATIN SMALL LETTER J WITH CARON
+        // followed by U+0323 COMBINING DOT BELOW.
+        let original = normalize_cs("\u{01F0}\u{0323}").unwrap();
+        let uppercase = normalize_cs("J\u{030C}\u{0323}").unwrap();
+        assert_eq!(original, "\u{01F0}\u{0323}");
+        assert_eq!(uppercase, "J\u{0323}\u{030C}");
+        assert_eq!(
+            normalize_ci_from_normalized_cs(&original),
+            normalize_ci_from_normalized_cs(&uppercase)
+        );
+    }
+
+    #[test]
     fn ci_from_cs_ligature_ffl() {
         // Ligature U+FB04 is preserved by CS normalization, then case-folded to "ffl".
         assert_eq!(normalize_ci_from_normalized_cs("\u{FB04}"), "ffl");
@@ -947,6 +982,15 @@ mod tests {
     fn ci_from_cs_deseret() {
         assert_eq!(normalize_ci_from_normalized_cs("\u{10400}"), "\u{10428}");
         assert_eq!(normalize_ci_from_normalized_cs("\u{10428}"), "\u{10428}");
+    }
+
+    #[test]
+    fn ci_from_cs_cherokee() {
+        // Cherokee case-folds to uppercase to preserve stability across Unicode versions.
+        assert_eq!(normalize_ci_from_normalized_cs("\u{13A0}"), "\u{13A0}");
+        assert_eq!(normalize_ci_from_normalized_cs("\u{AB70}"), "\u{13A0}");
+        assert_eq!(normalize_ci_from_normalized_cs("\u{13F0}"), "\u{13F0}");
+        assert_eq!(normalize_ci_from_normalized_cs("\u{13F8}"), "\u{13F0}");
     }
 
     #[test]
