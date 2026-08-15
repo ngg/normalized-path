@@ -16,7 +16,7 @@ icu_locale_core = { version = "2.1.0", default-features = false }
 
 [package]
 name = "normalized-path"
-version = "0.1.1"
+version = "0.2.0"
 description = "Opinionated cross-platform, optionally case-insensitive path normalization"
 repository = "https://github.com/ngg/normalized-path"
 documentation = "https://docs.rs/normalized-path"

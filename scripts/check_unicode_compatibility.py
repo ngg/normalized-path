@@ -10,7 +10,9 @@ FILES = [
     "UnicodeData.txt",
     "DerivedNormalizationProps.txt",
     "PropList.txt",
+    "Scripts.txt",
     "CaseFolding.txt",
+    "SpecialCasing.txt",
 ]
 DEFAULT_VERSIONS = [
     "4.1.0",
@@ -37,6 +39,7 @@ DEFAULT_VERSIONS = [
 ]
 URL = "https://www.unicode.org/Public/{}/ucd/{}"
 CACHE = Path(__file__).parent / "cache"
+LETTER_CATEGORIES = {"Lu", "Ll", "Lt", "Lm", "Lo"}
 
 
 def download(version, name):
@@ -102,6 +105,73 @@ def folding(text):
     return result, problems
 
 
+def special_casing(text):
+    rules, languages, contexts, problems = {}, set(), set(), []
+    for number, line in enumerate(text.splitlines(), 1):
+        content = line.partition("#")[0].strip()
+        if not content:
+            continue
+        fields = [part.strip() for part in content.split(";")]
+        if len(fields) < 5:
+            problems.append(f"line {number}: fewer than five fields")
+            continue
+
+        try:
+            source = tuple(int(part, 16) for part in fields[0].split())
+            mappings = tuple(
+                tuple(int(part, 16) for part in field.split())
+                for field in fields[1:4]
+            )
+        except ValueError:
+            problems.append(f"line {number}: invalid code point")
+            continue
+        if len(source) != 1:
+            problems.append(f"line {number}: source does not contain one code point")
+            continue
+
+        conditions = []
+        valid = True
+        for condition in fields[4].split():
+            negated = condition.casefold().startswith("not_")
+            context = condition[4:] if negated else condition
+            if context[:1].isupper() and all(
+                char.isascii() and (char.isalnum() or char == "_")
+                for char in context
+            ):
+                context = context.casefold()
+                contexts.add(context)
+                conditions.append(("context", f"not_{context}" if negated else context))
+                continue
+
+            subtags = condition.replace("_", "-").split("-")
+            primary = subtags[0]
+            if (
+                not 2 <= len(primary) <= 8
+                or not primary.isascii()
+                or not primary.isalpha()
+                or any(
+                    not 1 <= len(subtag) <= 8
+                    or not subtag.isascii()
+                    or not subtag.isalnum()
+                    for subtag in subtags[1:]
+                )
+            ):
+                problems.append(f"line {number}: unrecognized condition {condition!r}")
+                valid = False
+                continue
+            language = "-".join(subtag.casefold() for subtag in subtags)
+            languages.add(language)
+            conditions.append(("language", language))
+
+        if valid:
+            cp = source[0]
+            rule = (*mappings, tuple(sorted(conditions)))
+            rules.setdefault(cp, []).append(rule)
+
+    rules = {cp: tuple(sorted(cp_rules)) for cp, cp_rules in rules.items()}
+    return rules, languages, contexts, problems
+
+
 class Unicode:
     def __init__(self, version):
         files = {name: download(version, name) for name in FILES}
@@ -109,7 +179,19 @@ class Unicode:
         self.assigned = {cp for cp in self.chars if not 0xD800 <= cp <= 0xDFFF}
         self.space = property_set(files["PropList.txt"], "White_Space")
         self.soft = property_set(files["PropList.txt"], "Soft_Dotted")
+        greek = property_set(files["Scripts.txt"], "Greek")
+        self.greek_letter = {
+            cp
+            for cp in greek
+            if cp in self.chars and self.chars[cp][1] in LETTER_CATEGORIES
+        }
         self.fold, self.fold_shape_problems = folding(files["CaseFolding.txt"])
+        (
+            self.special_casing,
+            self.special_casing_languages,
+            self.special_casing_contexts,
+            self.special_casing_parse_problems,
+        ) = special_casing(files["SpecialCasing.txt"])
         excluded = property_set(
             files["DerivedNormalizationProps.txt"], "Full_Composition_Exclusion"
         )
@@ -126,6 +208,21 @@ def codepoints(value):
     if isinstance(value, int):
         value = (value,)
     return " ".join(f"U+{cp:04X}" for cp in value)
+
+
+def special_casing_rules(value):
+    if not value:
+        return "none"
+    result = []
+    for lower, title, upper, conditions in value:
+        conditions = " ".join(f"{kind}:{name}" for kind, name in conditions)
+        result.append(
+            f"lower={codepoints(lower) or 'empty'}, "
+            f"title={codepoints(title) or 'empty'}, "
+            f"upper={codepoints(upper) or 'empty'}, "
+            f"conditions={conditions or 'none'}"
+        )
+    return " | ".join(result)
 
 
 def changes(points, old, new, label=lambda cp: f"U+{cp:04X}", formatter=repr):
@@ -165,6 +262,34 @@ def compare(old_version, old, new_version, new):
         (f"old: U+{cp:04X} is unassigned" for cp in old.fold.keys() - old.assigned),
         (f"new: U+{cp:04X} is unassigned" for cp in new.fold.keys() - new.assigned),
     )
+    special_casing_parse_problems = chain(
+        (f"old: {problem}" for problem in old.special_casing_parse_problems),
+        (f"new: {problem}" for problem in new.special_casing_parse_problems),
+        (
+            f"old: U+{cp:04X} is unassigned"
+            for cp in old.special_casing.keys() - old.assigned
+        ),
+        (
+            f"new: U+{cp:04X} is unassigned"
+            for cp in new.special_casing.keys() - new.assigned
+        ),
+    )
+    special_casing_language_changes = (
+        f"{language}: {'removed' if language in old.special_casing_languages else 'added'}"
+        for language in sorted(
+            old.special_casing_languages ^ new.special_casing_languages
+        )
+    )
+    special_casing_context_changes = (
+        f"{context}: {'removed' if context in old.special_casing_contexts else 'added'}"
+        for context in sorted(old.special_casing_contexts ^ new.special_casing_contexts)
+    )
+    special_casing_changes = changes(
+        old.assigned,
+        lambda cp: old.special_casing.get(cp, ()),
+        lambda cp: new.special_casing.get(cp, ()),
+        formatter=special_casing_rules,
+    )
     fold_changes = changes(
         old.assigned,
         lambda cp: old.fold.get(cp, (cp,)),
@@ -196,10 +321,21 @@ def compare(old_version, old, new_version, new):
             (f"U+{cp:04X}" for cp in sorted((old.soft ^ new.soft) & old.assigned)),
         ),
         (
+            "is_greek_letter membership changed for old characters",
+            (
+                f"U+{cp:04X}"
+                for cp in sorted((old.greek_letter ^ new.greek_letter) & old.assigned)
+            ),
+        ),
+        (
             "Case folding data no longer has one mapping per assigned character",
             fold_shape_problems,
         ),
         ("Default full case folding changed for old characters", fold_changes),
+        ("SpecialCasing.txt condition format changed", special_casing_parse_problems),
+        ("SpecialCasing.txt language set changed", special_casing_language_changes),
+        ("SpecialCasing.txt casing context set changed", special_casing_context_changes),
+        ("Special casing changed for old characters", special_casing_changes),
         (
             "Case folding no longer preserves Soft_Dotted",
             (

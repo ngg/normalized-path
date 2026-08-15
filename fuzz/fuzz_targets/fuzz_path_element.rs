@@ -233,11 +233,15 @@ fn fuzz_normalize(data: &[u8], cs: CaseSensitivity) {
             }
         };
         check_locale(&langid!("und"));
-        // Languages with special casing rules defined in Unicode:
-        // https://www.unicode.org/Public/17.0.0/ucd/SpecialCasing.txt
+        // Languages handled specially by Unicode or ICU case mapping. Each must
+        // be fuzzed, and fixup_case_fold() must account for casing behavior that
+        // is not stable under normalization.
         check_locale(&langid!("tr"));
         check_locale(&langid!("az"));
         check_locale(&langid!("lt"));
+        check_locale(&langid!("el"));
+        check_locale(&langid!("nl"));
+        check_locale(&langid!("hy"));
     }
 
     // os_compatible round-trip: new(os_compatible) must produce the same normalized form.

@@ -52,6 +52,12 @@
 //! - In case-insensitive mode, Turkish İ (U+0130), dotless ı (U+0131), and
 //!   ASCII I/i are all deliberately normalized to the same form.  Users who
 //!   need to distinguish them cannot use case-insensitive mode.
+//! - In case-insensitive mode, Armenian U+0587 (և), U+0565 (ե) followed by
+//!   U+0582 (ւ), and U+0565 (ե) followed by U+057E (վ) are deliberately
+//!   normalized to the same form.
+//! - In case-insensitive mode, the Greek diacritics and dialytika distinctions
+//!   listed in step 8 are deliberately discarded.  Users who need to preserve
+//!   those distinctions cannot use case-insensitive mode.
 //! - Invalid UTF-8 byte sequences in `from_bytes`/`from_os_str` are rejected.
 //! - Names containing unassigned Unicode code points are rejected.  This makes it
 //!   much more likely that normalization results for accepted names remain stable
@@ -102,15 +108,29 @@
 //!    implement the Unicode canonical caseless matching algorithm (Definition D145):
 //!    *"A string X is a canonical caseless match for a string Y if and only if:
 //!    NFD(toCasefold(NFD(X))) = NFD(toCasefold(NFD(Y)))"*.  Step 8 extends this
-//!    with a post-case-fold fixup for Turkish/Azerbaijani and Lithuanian casing.
+//!    with a post-case-fold fixup for Turkish/Azerbaijani, Lithuanian,
+//!    Armenian, and Greek casing.
 //!
 //! 7. **Unicode `toCasefold()`** -- locale-independent full case folding.
 //!
-//! 8. **Post-case-fold fixup** -- maps U+0131 (ı) to ASCII i, and strips
-//!    U+0307 COMBINING DOT ABOVE after any `Soft_Dotted`
-//!    character (e.g. i, j, Cyrillic і/ј), blocked by intervening starters or
-//!    CCC=230 Above combiners (matching the Unicode `After_Soft_Dotted` condition).
-//!    This neutralizes casing inconsistencies that `toCasefold()` alone misses:
+//! 8. **Post-case-fold fixup** -- applies additional mappings needed to
+//!    keep the normalized form stable under locale-independent and
+//!    locale-specific casing:
+//!    - maps U+0131 (ı) to ASCII i;
+//!    - strips U+0307 COMBINING DOT ABOVE after any `Soft_Dotted` character
+//!      (e.g. i, j, Cyrillic і/ј), unless an intervening starter or CCC=230
+//!      Above combiner blocks it (matching the Unicode `After_Soft_Dotted`
+//!      condition);
+//!    - maps Armenian U+057E (վ) to U+0582 (ւ) when it immediately follows
+//!      U+0565 (ե).
+//!    - removes U+0300, U+0301, U+0302, U+0303, U+0304, U+0306, U+0308,
+//!      U+0311, U+0313, U+0314, U+0342, U+0343, and U+0344 when the nearest
+//!      preceding starter is a Greek letter.  Other intervening nonstarters are
+//!      preserved and do not prevent removal.  A Greek letter is a character
+//!      whose Unicode `Script` property is `Greek` and whose `General_Category`
+//!      is a letter category.
+//!
+//!    These mappings close gaps that `toCasefold()` alone leaves:
 //!    - **Dotless ı (U+0131):** `toCasefold()` treats ı as distinct from i
 //!      (ı folds to itself), yet `toUppercase(ı)` = I even without locale
 //!      tailoring, and I folds back to i -- creating a collision.
@@ -120,6 +140,16 @@
 //!      Lithuanian upper/titlecase removes U+0307 after soft-dotted characters
 //!      (e.g. `lt_uppercase("j\u{0307}")` = `J`).  Stripping U+0307 after
 //!      soft-dotted characters ensures stability under both directions.
+//!    - **Armenian ech-yiwn ligature U+0587 (և):** case-folding it produces
+//!      U+0565 (ե) followed by U+0582 (ւ).  ICU root upper/title casing produces
+//!      `ԵՒ`/`Եւ`, which also fold to that sequence.  ICU Armenian upper/title
+//!      casing instead produces `ԵՎ`/`Եվ`, which fold to U+0565 (ե) followed by
+//!      U+057E (վ).  The contextual replacement above makes all of these forms
+//!      normalize identically.
+//!    - **Greek uppercasing:** ICU Greek uppercasing removes Greek accent,
+//!      breathing, and length marks, and conditionally preserves or adds
+//!      dialytika.  Normalization removes each mark listed above when its nearest
+//!      preceding starter is a Greek letter.
 //!
 //! 9. **NFC composition** (final) -- recompose after case folding to produce the
 //!    canonical NFC output.

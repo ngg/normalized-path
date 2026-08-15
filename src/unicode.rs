@@ -2,7 +2,9 @@ use alloc::borrow::Cow;
 
 use icu_casemap::CaseMapper;
 use icu_normalizer::{ComposingNormalizer, DecomposingNormalizer};
-use icu_properties::props::{CanonicalCombiningClass, GeneralCategory, SoftDotted, WhiteSpace};
+use icu_properties::props::{
+    CanonicalCombiningClass, GeneralCategory, GeneralCategoryGroup, Script, SoftDotted, WhiteSpace,
+};
 use icu_properties::{CodePointMapData, CodePointSetData};
 
 /// NFD normalization (canonical decomposition).
@@ -48,6 +50,13 @@ pub fn is_soft_dotted(c: char) -> bool {
     CodePointSetData::new::<SoftDotted>().contains(c)
 }
 
+/// Whether `c` is a letter in the Greek script.
+#[must_use]
+pub fn is_greek_letter(c: char) -> bool {
+    CodePointMapData::<Script>::new().get(c) == Script::Greek
+        && GeneralCategoryGroup::Letter.contains(CodePointMapData::<GeneralCategory>::new().get(c))
+}
+
 /// Whether `c` has `GeneralCategory::Control` (Cc).
 #[must_use]
 pub fn is_control(c: char) -> bool {
@@ -71,8 +80,14 @@ mod tests {
     //!   `white_space_exhaustive()` pins the complete set.
     //! - `Soft_Dotted` membership must not change for previously assigned characters;
     //!   `soft_dotted_exhaustive()` pins the complete set.
+    //! - The intersection of `Script=Greek` and `General_Category=Letter` must not
+    //!   change for previously assigned characters; `greek_letter_exhaustive()` pins
+    //!   the complete set.
     //! - Default full case-fold mappings must not change for previously assigned
     //!   characters; `case_fold_exhaustive()` pins every non-identity mapping.
+    //! - Every language handled specially by Unicode or ICU case mapping must be
+    //!   exercised by `fuzz_path_element`.  If its casing behavior is not stable
+    //!   under normalization, `fixup_case_fold()` must account for it.
     //! - Case folding must remain character-wise so that the scalar mapping test proves
     //!   the result for arbitrary strings; `fuzz_path_element` compares whole-string
     //!   folding with concatenated per-character folding.
@@ -95,8 +110,8 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::{
-        case_fold, is_above, is_assigned, is_control, is_soft_dotted, is_starter, is_whitespace,
-        nfc, nfd,
+        case_fold, is_above, is_assigned, is_control, is_greek_letter, is_soft_dotted, is_starter,
+        is_whitespace, nfc, nfd,
     };
 
     // --- nfd / nfc ---
@@ -313,6 +328,48 @@ mod tests {
                 folded_chars[0] as u32
             );
         }
+    }
+
+    #[test]
+    fn greek_letter_exhaustive() {
+        // Complete intersection of Script=Greek and General_Category=Letter
+        // in Unicode 17.0.0.
+        // Sources:
+        // https://www.unicode.org/Public/17.0.0/ucd/Scripts.txt
+        // https://www.unicode.org/Public/17.0.0/ucd/extracted/DerivedGeneralCategory.txt
+        #[rustfmt::skip]
+        const GREEK_LETTER_RANGES: &[core::ops::RangeInclusive<u32>] = &[
+            0x0370..=0x0373, 0x0376..=0x0377, 0x037A..=0x037D,
+            0x037F..=0x037F, 0x0386..=0x0386, 0x0388..=0x038A,
+            0x038C..=0x038C, 0x038E..=0x03A1, 0x03A3..=0x03E1,
+            0x03F0..=0x03F5, 0x03F7..=0x03FF, 0x1D26..=0x1D2A,
+            0x1D5D..=0x1D61, 0x1D66..=0x1D6A, 0x1DBF..=0x1DBF,
+            0x1F00..=0x1F15, 0x1F18..=0x1F1D, 0x1F20..=0x1F45,
+            0x1F48..=0x1F4D, 0x1F50..=0x1F57, 0x1F59..=0x1F59,
+            0x1F5B..=0x1F5B, 0x1F5D..=0x1F5D, 0x1F5F..=0x1F7D,
+            0x1F80..=0x1FB4, 0x1FB6..=0x1FBC, 0x1FBE..=0x1FBE,
+            0x1FC2..=0x1FC4, 0x1FC6..=0x1FCC, 0x1FD0..=0x1FD3,
+            0x1FD6..=0x1FDB, 0x1FE0..=0x1FEC, 0x1FF2..=0x1FF4,
+            0x1FF6..=0x1FFC, 0x2126..=0x2126, 0xAB65..=0xAB65,
+        ];
+
+        let mut expected = alloc::vec::Vec::new();
+        for range in GREEK_LETTER_RANGES {
+            for cp in range.clone() {
+                expected.push(cp);
+            }
+        }
+
+        let mut found = alloc::vec::Vec::new();
+        for cp in 0..=0x10_FFFFu32 {
+            let Some(c) = char::from_u32(cp) else {
+                continue;
+            };
+            if is_greek_letter(c) {
+                found.push(cp);
+            }
+        }
+        assert_eq!(found, expected);
     }
 
     #[test]

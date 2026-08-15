@@ -3,8 +3,8 @@ use alloc::borrow::Cow;
 use crate::ErrorKind;
 use crate::error::ResultKind;
 use crate::unicode::{
-    case_fold, is_above, is_assigned, is_control, is_soft_dotted, is_starter, is_whitespace, nfc,
-    nfd,
+    case_fold, is_above, is_assigned, is_control, is_greek_letter, is_soft_dotted, is_starter,
+    is_whitespace, nfc, nfd,
 };
 use crate::utils::cow;
 
@@ -34,6 +34,12 @@ pub fn map_fullwidth(s: &str) -> Cow<'_, str> {
 ///   (e.g. `lt_lowercase("J\u{0301}")` = `j\u{0307}\u{0301}`), and upper/titlecase
 ///   removes U+0307 after soft-dotted characters
 ///   (e.g. `lt_uppercase("j\u{0307}")` = `J`).
+/// - Maps Armenian U+057E (վ) to U+0582 (ւ) when it immediately follows
+///   U+0565 (ե).  ICU Armenian upper/title casing maps U+0587 (և) to ԵՎ/Եվ,
+///   while Unicode case folding and root casing use the ECH + YIWN sequence.
+/// - Removes the Greek combining marks specified in step 8 of the crate-level
+///   normalization pipeline from canonical combining sequences headed by a
+///   Greek letter.
 ///
 /// Note: this function relies on the invariant that `toCasefold()` preserves
 /// the `Soft_Dotted` property — every `Soft_Dotted` character either folds to
@@ -73,8 +79,49 @@ pub fn fixup_case_fold(s: &str) -> Cow<'_, str> {
                     }
                 })
             })
+            .flatten()
+            .scan(false, |after_armenian_ech, c| {
+                let mapped = if *after_armenian_ech && c == '\u{057E}' {
+                    // Armenian ե + վ → ե + ւ. This reconciles ICU's
+                    // Armenian casing of և with its default case fold.
+                    '\u{0582}'
+                } else {
+                    c
+                };
+                *after_armenian_ech = mapped == '\u{0565}';
+                Some(mapped)
+            })
+            .scan(false, |greek_starter, c| {
+                if *greek_starter && is_removed_greek_mark(c) {
+                    return Some(None);
+                }
+
+                if is_starter(c) {
+                    *greek_starter = is_greek_letter(c);
+                }
+                Some(Some(c))
+            })
             .flatten(),
         s,
+    )
+}
+
+fn is_removed_greek_mark(c: char) -> bool {
+    matches!(
+        c,
+        '\u{0300}'
+            | '\u{0301}'
+            | '\u{0302}'
+            | '\u{0303}'
+            | '\u{0304}'
+            | '\u{0306}'
+            | '\u{0308}'
+            | '\u{0311}'
+            | '\u{0313}'
+            | '\u{0314}'
+            | '\u{0342}'
+            | '\u{0343}'
+            | '\u{0344}'
     )
 }
 
@@ -146,10 +193,11 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::{
-        fixup_case_fold, map_fullwidth, normalize_ci_from_normalized_cs, normalize_cs,
-        validate_path_element,
+        fixup_case_fold, is_removed_greek_mark, map_fullwidth, normalize_ci_from_normalized_cs,
+        normalize_cs, validate_path_element,
     };
     use crate::ErrorKind;
+    use crate::unicode::is_starter;
 
     // --- map_fullwidth ---
 
@@ -263,6 +311,90 @@ mod tests {
         let result = fixup_case_fold("i\u{0301}\u{0307}");
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, "i\u{0301}\u{0307}");
+    }
+
+    // --- fixup_case_fold: Armenian ech-yiwn ---
+
+    #[test]
+    fn fixup_case_fold_armenian_ech_vew() {
+        assert_eq!(fixup_case_fold("\u{0565}\u{057E}"), "\u{0565}\u{0582}");
+    }
+
+    #[test]
+    fn fixup_case_fold_armenian_vew_outside_sequence_unchanged() {
+        for input in ["\u{057E}", "\u{057E}\u{0565}", "\u{0565}a\u{057E}"] {
+            let result = fixup_case_fold(input);
+            assert!(matches!(result, Cow::Borrowed(_)));
+            assert_eq!(result, input);
+        }
+    }
+
+    // --- fixup_case_fold: Greek uppercasing ---
+
+    #[test]
+    fn removed_greek_marks_exhaustive() {
+        #[rustfmt::skip]
+        const REMOVED_GREEK_MARKS: &[u32] = &[
+            0x0300, // COMBINING GRAVE ACCENT
+            0x0301, // COMBINING ACUTE ACCENT
+            0x0302, // COMBINING CIRCUMFLEX ACCENT
+            0x0303, // COMBINING TILDE
+            0x0304, // COMBINING MACRON
+            0x0306, // COMBINING BREVE
+            0x0308, // COMBINING DIAERESIS
+            0x0311, // COMBINING INVERTED BREVE
+            0x0313, // COMBINING COMMA ABOVE
+            0x0314, // COMBINING REVERSED COMMA ABOVE
+            0x0342, // COMBINING GREEK PERISPOMENI
+            0x0343, // COMBINING GREEK KORONIS
+            0x0344, // COMBINING GREEK DIALYTIKA TONOS
+        ];
+
+        let mut found = alloc::vec::Vec::new();
+        for cp in 0..=0x10_FFFFu32 {
+            let Some(c) = char::from_u32(cp) else {
+                continue;
+            };
+            if is_removed_greek_mark(c) {
+                assert!(!is_starter(c), "removed Greek mark U+{cp:04X} is a starter");
+                found.push(cp);
+            }
+        }
+        assert_eq!(found, REMOVED_GREEK_MARKS);
+    }
+
+    #[test]
+    fn fixup_case_fold_greek_marks() {
+        for mark in [
+            '\u{0300}', '\u{0301}', '\u{0302}', '\u{0303}', '\u{0304}', '\u{0306}', '\u{0308}',
+            '\u{0311}', '\u{0313}', '\u{0314}', '\u{0342}', '\u{0343}', '\u{0344}',
+        ] {
+            let mut input = String::from('\u{03B1}');
+            input.push(mark);
+            assert_eq!(fixup_case_fold(&input), "\u{03B1}");
+        }
+
+        assert_eq!(fixup_case_fold("\u{03A5}\u{0344}"), "\u{03A5}");
+        assert_eq!(
+            fixup_case_fold("\u{03B1}\u{03C5}\u{0308}"),
+            "\u{03B1}\u{03C5}"
+        );
+
+        let non_greek = fixup_case_fold("e\u{0301}");
+        assert!(matches!(non_greek, Cow::Borrowed(_)));
+        assert_eq!(non_greek, "e\u{0301}");
+    }
+
+    #[test]
+    fn fixup_case_fold_greek_diacritics_after_unrelated_nonstarter() {
+        assert_eq!(
+            fixup_case_fold("\u{03B9}\u{05C7}\u{0308}\u{0301}"),
+            "\u{03B9}\u{05C7}"
+        );
+        assert_eq!(
+            fixup_case_fold("\u{03B1}\u{05C7}\u{03C5}\u{0308}"),
+            "\u{03B1}\u{05C7}\u{03C5}"
+        );
     }
 
     // --- fixup_case_fold: Lithuanian J dot stripping ---
@@ -652,6 +784,68 @@ mod tests {
 
         // "ı\u{0307}" stays as-is in NFC. CI must map to "i".
         assert_eq!(normalize_ci_from_normalized_cs("\u{0131}\u{0307}"), "i");
+    }
+
+    #[test]
+    fn ci_from_cs_armenian_ech_yiwn() {
+        let expected = "\u{0565}\u{0582}";
+        for input in [
+            "\u{0587}",         // և: ligature
+            "\u{0565}\u{0582}", // եւ: default folded form
+            "\u{0565}\u{057E}", // եվ: Armenian folded form
+            "\u{0535}\u{0552}", // ԵՒ: root uppercase
+            "\u{0535}\u{0582}", // Եւ: root titlecase
+            "\u{0535}\u{054E}", // ԵՎ: Armenian uppercase
+            "\u{0535}\u{057E}", // Եվ: Armenian titlecase
+        ] {
+            assert_eq!(
+                normalize_ci_from_normalized_cs(input),
+                expected,
+                "input: {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ci_from_cs_greek_uppercase() {
+        assert_eq!(normalize_ci_from_normalized_cs("\u{0390}"), "\u{03B9}");
+        assert_eq!(normalize_ci_from_normalized_cs("\u{03AA}"), "\u{03B9}");
+        let cs = normalize_cs("\u{03A5}\u{0344}").unwrap();
+        assert_eq!(normalize_ci_from_normalized_cs(&cs), "\u{03C5}");
+        assert_eq!(
+            normalize_ci_from_normalized_cs("\u{0390}\u{05C7}"),
+            "\u{03B9}\u{05C7}"
+        );
+
+        for (input, greek_uppercase) in [
+            (
+                "\u{03AC}\u{03B4}\u{03B9}\u{03BA}\u{03BF}\u{03C2}",
+                "\u{0391}\u{0394}\u{0399}\u{039A}\u{039F}\u{03A3}",
+            ),
+            (
+                "\u{039C}\u{03B1}\u{0390}\u{03BF}\u{03C5}",
+                "\u{039C}\u{0391}\u{03AA}\u{039F}\u{03A5}",
+            ),
+            (
+                "\u{03AC}\u{03C5}\u{03BB}\u{03BF}\u{03C2}",
+                "\u{0391}\u{03AB}\u{039B}\u{039F}\u{03A3}",
+            ),
+            (
+                "\u{1FA0}\u{03B4}\u{03AE}",
+                "\u{03A9}\u{0399}\u{0394}\u{0397}",
+            ),
+            (
+                "\u{1FE5}\u{03AE}\u{03BC}\u{03B1}\u{03C4}\u{03B1}",
+                "\u{03A1}\u{0397}\u{039C}\u{0391}\u{03A4}\u{0391}",
+            ),
+            ("\u{03AE}", "\u{0389}"),
+        ] {
+            assert_eq!(
+                normalize_ci_from_normalized_cs(input),
+                normalize_ci_from_normalized_cs(greek_uppercase),
+                "input: {input:?}, Greek uppercase: {greek_uppercase:?}"
+            );
+        }
     }
 
     #[test]
