@@ -8,6 +8,20 @@ Opinionated cross-platform, optionally case-insensitive path normalization.
 
 See the [API documentation](https://docs.rs/normalized-path) for details and examples.
 
+## Changelog
+
+### 0.2.0 (unreleased; MSRV 1.85; Unicode 17.0.0)
+
+* **Breaking:** Fixed case-insensitive normalization under Greek and Armenian locale-specific case mappings; affected names now normalize differently.
+
+### 0.1.1 (2026-08-15; MSRV 1.85; Unicode 17.0.0)
+
+* Relaxed ICU4X dependency constraints to allow 2.3.x.
+
+### 0.1.0 (2026-08-13; MSRV 1.85; Unicode 17.0.0)
+
+* First non-0.0.x release.
+
 ## License
 
 Licensed under either of
