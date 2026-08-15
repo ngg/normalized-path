@@ -14,6 +14,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  MSRV: "1.85"
   RUSTFLAGS: "-D warnings"
 
 jobs:
@@ -21,17 +22,57 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, macos-26-intel, windows-latest]
-    runs-on: ${{ matrix.os }}
+        include:
+          - runner: ubuntu-latest
+          - runner: macos-latest
+          - runner: macos-26-intel
+          - runner: windows-latest
+          - runner: ubuntu-latest
+            msrv: true
+          - runner: ubuntu-latest
+            toolchain: nightly
+            minimal_versions: true
+          - runner: ubuntu-latest
+            target: aarch64-linux-android
+            skip_tests: true
+          - runner: macos-latest
+            target: aarch64-apple-ios
+            skip_tests: true
+          - runner: ubuntu-latest
+            target: wasm32-unknown-unknown
+          - runner: ubuntu-latest
+            target: wasm32-wasip1
+    runs-on: ${{ matrix.runner }}
+    env:
+      TARGET_ARG: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+      MINIMAL_VERSIONS_ARG: ${{ matrix.minimal_versions && '-Z minimal-versions' || '' }}
+      IGNORE_RUST_VERSION_ARG: ${{ matrix.msrv != true && '--ignore-rust-version' || '' }}
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.msrv && env.MSRV || matrix.toolchain || 'stable' }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo update --ignore-rust-version
-      - run: cargo build
-      - run: cargo build --no-default-features
-      - run: cargo test
-      - run: cargo test --no-default-features
+        with:
+          cache-all-crates: true
+      - run: cargo update ${{ env.MINIMAL_VERSIONS_ARG }} ${{ env.IGNORE_RUST_VERSION_ARG }}
+      - if: matrix.target != ''
+        run: rustup target add ${{ matrix.target }}
+      - if: matrix.target == 'wasm32-unknown-unknown'
+        run: |
+          VERSION=$(cargo pkgid wasm-bindgen | cut -d"@" -f2)
+          INSTALLED=$(wasm-bindgen --version 2>/dev/null | cut -d" " -f2 || echo "")
+          if [ "$VERSION" != "$INSTALLED" ]; then
+            cargo install -f wasm-bindgen-cli --version "$VERSION"
+          fi
+      - if: matrix.target == 'wasm32-wasip1'
+        run: cargo install wasmtime-cli
+      - run: cargo build ${{ env.TARGET_ARG }}
+      - run: cargo build ${{ env.TARGET_ARG }} --no-default-features
+      - if: matrix.skip_tests != true
+        run: cargo test ${{ env.TARGET_ARG }}
+      - if: matrix.skip_tests != true
+        run: cargo test ${{ env.TARGET_ARG }} --no-default-features
 
   clippy:
     runs-on: ubuntu-latest
@@ -67,84 +108,18 @@ jobs:
       - run: cargo update --ignore-rust-version
       - run: cargo docs-rs
 
-  msrv:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.85"
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo update
-      - run: cargo build
-      - run: cargo build --no-default-features
-      - run: cargo test
-      - run: cargo test --no-default-features
-
-  minimum-versions:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@nightly
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo update -Z minimal-versions --ignore-rust-version
-      - run: cargo build
-      - run: cargo build --no-default-features
-      - run: cargo test
-      - run: cargo test --no-default-features
-
-  wasm32-unknown-unknown:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: true
-      - run: cargo update --ignore-rust-version
-      - run: |
-          VERSION=$(cargo pkgid wasm-bindgen | cut -d"@" -f2)
-          INSTALLED=$(wasm-bindgen --version 2>/dev/null | cut -d" " -f2 || echo "")
-          if [ "$VERSION" != "$INSTALLED" ]; then
-            cargo install -f wasm-bindgen-cli --version "$VERSION"
-          fi
-      - run: cargo build --target wasm32-unknown-unknown
-      - run: cargo test --target wasm32-unknown-unknown
-
-  wasm32-wasip1:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-wasip1
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: true
-      - run: cargo install wasmtime-cli
-      - run: cargo update --ignore-rust-version
-      - run: cargo build --target wasm32-wasip1
-      - run: cargo test --target wasm32-wasip1
-
   fuzz:
-    name: fuzz-${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: macos
-            runner: macos-latest
+          - runner: macos-latest
             fork: 3
-          - name: macos-intel
-            runner: macos-26-intel
+          - runner: macos-26-intel
             fork: 4
-          - name: windows
-            runner: windows-latest
+          - runner: windows-latest
             fork: 4
-          - name: linux
-            runner: ubuntu-latest
+          - runner: ubuntu-latest
             fork: 4
     uses: ./.github/workflows/fuzz.yml
     with:

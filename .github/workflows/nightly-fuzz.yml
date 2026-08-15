@@ -10,22 +10,17 @@ permissions:
 
 jobs:
   fuzz:
-    name: fuzz-${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: macos
-            runner: macos-latest
+          - runner: macos-latest
             fork: 3
-          - name: macos-intel
-            runner: macos-26-intel
+          - runner: macos-26-intel
             fork: 4
-          - name: windows
-            runner: windows-latest
+          - runner: windows-latest
             fork: 4
-          - name: linux
-            runner: ubuntu-latest
+          - runner: ubuntu-latest
             fork: 4
     uses: ./.github/workflows/fuzz.yml
     with:
