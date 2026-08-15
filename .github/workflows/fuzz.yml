@@ -56,7 +56,10 @@ jobs:
       - run: cargo update --ignore-rust-version
       - run: |
           # Ensure MSVC link.exe is found before Git's /usr/bin/link.exe
-          [ -n "$VCToolsInstallDir" ] && export PATH="$(cygpath -u "$VCToolsInstallDir/bin/Hostx64/x64"):$PATH"
+          if [ -n "$VCToolsInstallDir" ]; then
+            PATH="$(cygpath -u "$VCToolsInstallDir/bin/Hostx64/x64"):$PATH"
+            export PATH
+          fi
           for target in $(cargo fuzz list 2>/dev/null); do
             cargo fuzz run "$target" -- -max_total_time="$TIMEOUT" -fork="$FORK"
             # TODO: figure out why cmin on one platform loses coverage for the other,
