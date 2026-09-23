@@ -10,6 +10,10 @@ See the [API documentation](https://docs.rs/normalized-path) for details and exa
 
 ## Changelog
 
+### 0.2.1 (Unreleased; MSRV 1.88; Unicode 18.0.0)
+
+* Updated to Unicode 18.0.0 (normalization of previously assigned characters is unchanged).
+
 ### 0.2.0 (2026-08-16; MSRV 1.85; Unicode 17.0.0)
 
 * **Breaking:** Fixed case-insensitive normalization under Greek and Armenian locale-specific case mappings; affected names now normalize differently.
