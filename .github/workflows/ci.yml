@@ -14,7 +14,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  MSRV: "1.85"
   RUSTFLAGS: "-D warnings"
 
 jobs:
@@ -60,9 +59,21 @@ jobs:
       IGNORE_RUST_VERSION_ARG: ${{ matrix.msrv != true && '--ignore-rust-version' || '' }}
     steps:
       - uses: actions/checkout@v6
+      - name: Read MSRV from Cargo.toml
+        if: matrix.msrv
+        id: msrv
+        shell: python
+        run: |
+          import os
+          import tomllib
+
+          with open("Cargo.toml", "rb") as manifest:
+              msrv = tomllib.load(manifest)["package"]["rust-version"]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              print(f"version={msrv}", file=output)
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.msrv && env.MSRV || matrix.toolchain || 'stable' }}
+          toolchain: ${{ steps.msrv.outputs.version || matrix.toolchain || 'stable' }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: true
