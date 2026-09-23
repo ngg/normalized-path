@@ -57,7 +57,7 @@ pub fn map_fullwidth(s: &str) -> Cow<'_, str> {
 /// that is harmless since it only adds extra dot stripping, not skips it.
 /// This invariant is verified by a test in `unicode.rs`.
 ///
-/// See <https://www.unicode.org/Public/17.0.0/ucd/SpecialCasing.txt>.
+/// See <https://www.unicode.org/Public/18.0.0/ucd/SpecialCasing.txt>.
 #[must_use]
 pub fn fixup_case_fold(s: &str) -> Cow<'_, str> {
     cow(
@@ -785,6 +785,34 @@ mod tests {
     }
 
     // --- normalize_ci_from_normalized_cs ---
+
+    #[test]
+    fn normalize_unicode18_characters() {
+        for (input, expected) in [
+            ("\u{A7DD}", "\u{0277}"),   // LATIN CAPITAL LETTER CLOSED OMEGA
+            ("\u{1DF95}", "ss"),        // LATIN SMALL LIGATURE LONG S WITH DESCENDER S
+            ("\u{18E00}", "\u{18E00}"), // Jurchen
+            ("\u{3D000}", "\u{3D000}"), // Seal
+            ("\u{1FAEB}", "\u{1FAEB}"), // CRACKING FACE
+            // New Soft_Dotted characters participate in dot removal.
+            ("\u{1DF6F}\u{0307}", "\u{1DF6F}"),
+            ("\u{1DF70}\u{0307}", "\u{1DF70}"),
+            ("\u{1DF71}\u{0307}", "\u{1DF71}"),
+            ("\u{1DFD9}\u{0307}", "\u{1DFD9}"),
+            // New Greek modifier letters participate in Greek mark removal.
+            ("\u{1DFF3}\u{0301}", "\u{1DFF3}"),
+            ("\u{1DFF4}\u{0301}", "\u{1DFF4}"),
+            // COMBINING GRAVE-DOT has CCC=230 and blocks dot removal.
+            ("i\u{1ADE}\u{0307}", "i\u{1ADE}\u{0307}"),
+        ] {
+            let cs = normalize_cs(input).unwrap();
+            assert_eq!(cs, input, "case-sensitive normalization of {input:?}");
+            let ci = normalize_ci_from_normalized_cs(&cs);
+            assert_eq!(ci, expected, "case-insensitive normalization of {input:?}");
+            assert_eq!(normalize_cs(&ci).unwrap(), ci);
+            assert_eq!(normalize_ci_from_normalized_cs(&ci), ci);
+        }
+    }
 
     #[test]
     fn ci_from_cs_turkish_i() {

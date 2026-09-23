@@ -109,7 +109,7 @@
 //!    is the mapping used by the Unicode canonical caseless matching algorithm
 //!    (Definition D145):
 //!    *"A string X is a canonical caseless match for a string Y if and only if:
-//!    NFD(toCasefold(NFD(X))) = NFD(toCasefold(NFD(Y)))"*.  For Unicode 17.0.0,
+//!    NFD(toCasefold(NFD(X))) = NFD(toCasefold(NFD(Y)))"*.  For Unicode 18.0.0,
 //!    `toCasefold(NFD(X))` is already in NFD, so the implementation skips the
 //!    outer NFD as a no-op.
 //!
@@ -190,7 +190,7 @@
 //! # Unicode version
 //!
 //! All Unicode operations (NFC, NFD, case folding, property lookups) use
-//! **Unicode 17.0.0**. Updating to a newer Unicode version is not considered a
+//! **Unicode 18.0.0**. Updating to a newer Unicode version is not considered a
 //! semver-breaking change as long as the normalization pipeline produces identical
 //! results for all strings consisting of characters assigned in the previous version.
 //! If a new Unicode version were to change normalization results for previously
