@@ -235,14 +235,14 @@ mod tests {
     #[test]
     fn case_fold_exhaustive() {
         // The fuzzer verifies that string folding remains character-wise, which lets this scalar test cover all strings.
-        // Complete default full case-folding mappings for Unicode 17.0.0.
+        // Complete default full case-folding mappings for Unicode 18.0.0.
         // C and F are the mappings used by toCasefold(); characters without
         // one of those entries map to themselves.
         const CASE_FOLDING: &str = include_str!("CaseFolding.txt");
 
         assert_eq!(
             CASE_FOLDING.lines().next(),
-            Some("# CaseFolding-17.0.0.txt")
+            Some("# CaseFolding-18.0.0.txt")
         );
 
         let mut mappings = alloc::collections::BTreeMap::new();
@@ -408,10 +408,10 @@ mod tests {
     #[test]
     fn greek_letter_exhaustive() {
         // Complete intersection of Script=Greek and General_Category=Letter
-        // in Unicode 17.0.0.
+        // in Unicode 18.0.0.
         // Sources:
-        // https://www.unicode.org/Public/17.0.0/ucd/Scripts.txt
-        // https://www.unicode.org/Public/17.0.0/ucd/extracted/DerivedGeneralCategory.txt
+        // https://www.unicode.org/Public/18.0.0/ucd/Scripts.txt
+        // https://www.unicode.org/Public/18.0.0/ucd/extracted/DerivedGeneralCategory.txt
         #[rustfmt::skip]
         const GREEK_LETTER_RANGES: &[core::ops::RangeInclusive<u32>] = &[
             0x0370..=0x0373, 0x0376..=0x0377, 0x037A..=0x037D,
@@ -426,6 +426,7 @@ mod tests {
             0x1FC2..=0x1FC4, 0x1FC6..=0x1FCC, 0x1FD0..=0x1FD3,
             0x1FD6..=0x1FDB, 0x1FE0..=0x1FEC, 0x1FF2..=0x1FF4,
             0x1FF6..=0x1FFC, 0x2126..=0x2126, 0xAB65..=0xAB65,
+            0x1DFF3..=0x1DFF4,
         ];
 
         let mut expected = alloc::vec::Vec::new();
@@ -449,8 +450,8 @@ mod tests {
 
     #[test]
     fn soft_dotted_exhaustive() {
-        // Complete list of Soft_Dotted characters in Unicode 17.0.0.
-        // Source: https://www.unicode.org/Public/17.0.0/ucd/PropList.txt
+        // Complete list of Soft_Dotted characters in Unicode 18.0.0.
+        // Source: https://www.unicode.org/Public/18.0.0/ucd/PropList.txt
         #[rustfmt::skip]
         const SOFT_DOTTED: &[u32] = &[
             0x0069, 0x006A,             // LATIN SMALL LETTER I..J
@@ -485,6 +486,10 @@ mod tests {
             0x1D65E, 0x1D65F,           // MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL I..J
             0x1D692, 0x1D693,           // MATHEMATICAL MONOSPACE SMALL I..J
             0x1DF1A,                    // LATIN SMALL LETTER I WITH STROKE AND RETROFLEX HOOK
+            0x1DF6F,                    // LATIN SMALL LETTER PHONOTYPIC DIPHTHONG AI
+            0x1DF70,                    // LATIN SMALL LETTER I WITH PIGTAIL AT BOTTOM
+            0x1DF71,                    // LATIN SMALL LETTER STRETCHED I
+            0x1DFD9,                    // MODIFIER LETTER SMALL J WITH STROKE
             0x1E04C, 0x1E04D,           // MODIFIER LETTER CYRILLIC SMALL BYELORUSSIAN-UKRAINIAN I..JE
             0x1E068,                    // CYRILLIC SUBSCRIPT SMALL LETTER BYELORUSSIAN-UKRAINIAN I
         ];
@@ -502,8 +507,8 @@ mod tests {
 
     #[test]
     fn above_exhaustive() {
-        // Complete list of CCC=230 (Above) character ranges in Unicode 17.0.0.
-        // Source: https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt
+        // Complete list of CCC=230 (Above) character ranges in Unicode 18.0.0.
+        // Source: https://www.unicode.org/Public/18.0.0/ucd/UnicodeData.txt
         #[rustfmt::skip]
         const ABOVE_RANGES: &[core::ops::RangeInclusive<u32>] = &[
             0x0300..=0x0314, 0x033D..=0x0344, 0x0346..=0x0346,
@@ -528,7 +533,8 @@ mod tests {
             0x17DD..=0x17DD, 0x193A..=0x193A, 0x1A17..=0x1A17,
             0x1A75..=0x1A7C, 0x1AB0..=0x1AB4, 0x1ABB..=0x1ABC,
             0x1AC1..=0x1AC2, 0x1AC5..=0x1AC9, 0x1ACB..=0x1ADC,
-            0x1AE0..=0x1AE5, 0x1AE7..=0x1AEA, 0x1B6B..=0x1B6B,
+            0x1ADE..=0x1AE5, 0x1AE7..=0x1AEA, 0x1AEC..=0x1AED,
+            0x1AF0..=0x1AF0, 0x1B6B..=0x1B6B,
             0x1B6D..=0x1B73, 0x1CD0..=0x1CD2, 0x1CDA..=0x1CDB,
             0x1CE0..=0x1CE0, 0x1CF4..=0x1CF4, 0x1CF8..=0x1CF9,
             0x1DC0..=0x1DC1, 0x1DC3..=0x1DC9, 0x1DCB..=0x1DCC,
@@ -542,7 +548,9 @@ mod tests {
             0xAAC1..=0xAAC1, 0xFE20..=0xFE26, 0xFE2E..=0xFE2F,
             0x10376..=0x1037A, 0x10A0F..=0x10A0F, 0x10A38..=0x10A38,
             0x10AE5..=0x10AE5, 0x10D24..=0x10D27, 0x10D69..=0x10D6D,
-            0x10EAB..=0x10EAC, 0x10F48..=0x10F4A, 0x10F4C..=0x10F4C,
+            0x10EAB..=0x10EAC, 0x10ECB..=0x10ECB, 0x10ECE..=0x10ECF,
+            0x10EF3..=0x10EF3, 0x10EF5..=0x10EF5, 0x10EF7..=0x10EF9,
+            0x10F48..=0x10F4A, 0x10F4C..=0x10F4C,
             0x10F82..=0x10F82, 0x10F84..=0x10F84, 0x11100..=0x11102,
             0x11366..=0x1136C, 0x11370..=0x11374, 0x1145E..=0x1145E,
             0x16B30..=0x16B36, 0x1D185..=0x1D189, 0x1D1AA..=0x1D1AD,
@@ -573,8 +581,8 @@ mod tests {
 
     #[test]
     fn white_space_exhaustive() {
-        // Complete list of White_Space characters in Unicode 17.0.0.
-        // Source: https://www.unicode.org/Public/17.0.0/ucd/PropList.txt
+        // Complete list of White_Space characters in Unicode 18.0.0.
+        // Source: https://www.unicode.org/Public/18.0.0/ucd/PropList.txt
         #[rustfmt::skip]
         const WHITE_SPACE: &[u32] = &[
             0x0009, 0x000A, 0x000B, 0x000C, 0x000D, // <control-0009>..<control-000D>
@@ -874,7 +882,8 @@ mod tests {
         assert!(is_assigned('\u{1FA7C}')); // CRUTCH (Unicode 14.0)
         assert!(!is_assigned('\u{1FA7D}')); // unassigned
         assert!(is_assigned('\u{1FAEA}')); // DISTORTED FACE (Unicode 17.0.0)
-        assert!(!is_assigned('\u{1FAEB}')); // unassigned
+        assert!(is_assigned('\u{1FAEB}')); // CRACKING FACE (Unicode 18.0.0)
+        assert!(!is_assigned('\u{1FAEC}')); // unassigned
     }
 
     // --- Non-standard characters (unassigned, PUA, noncharacters) ---
@@ -1097,9 +1106,9 @@ mod tests {
         assert_eq!(result, "\u{1F600}");
     }
 
-    // --- Unicode 17.0.0 characters ---
+    // --- Characters introduced in Unicode 17.0.0 ---
 
-    // U+20C1 SAUDI RIYAL SIGN (new currency symbol)
+    // U+20C1 SAUDI RIYAL SIGN
     #[test]
     fn nfd_saudi_riyal_unchanged() {
         let result = nfd("\u{20C1}");
@@ -1131,7 +1140,7 @@ mod tests {
         assert!(is_starter('\u{20C1}'));
     }
 
-    // U+2B96 EQUALS SIGN WITH INFINITY ABOVE (new math symbol)
+    // U+2B96 EQUALS SIGN WITH INFINITY ABOVE
     #[test]
     fn nfd_equals_infinity_unchanged() {
         let result = nfd("\u{2B96}");
@@ -1207,5 +1216,40 @@ mod tests {
     #[test]
     fn is_starter_cjk_extension_j() {
         assert!(is_starter('\u{323B0}'));
+    }
+
+    // --- Characters introduced in Unicode 18.0.0 ---
+
+    #[test]
+    fn nfd_unicode18_combining_marks() {
+        // U+1ADE COMBINING GRAVE-DOT (CCC=230) and U+1AEE COMBINING
+        // DOUBLE GRAVE ACCENT BELOW (CCC=220) are new in Unicode 18.
+        // Check decomposition and ordering against their UnicodeData.txt values.
+        let expected = "C\u{0327}\u{1AEE}\u{1ADE}";
+        assert_eq!(nfd("\u{00C7}\u{1ADE}\u{1AEE}"), expected);
+
+        let result = nfd(expected);
+        assert_eq!(result, expected);
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn nfc_unicode18_combining_marks() {
+        // Reorder the new CCC=220/230 marks after CEDILLA (CCC=202), then
+        // compose C + CEDILLA. Unicode 17 treats both new marks as starters.
+        let expected = "\u{00C7}\u{1AEE}\u{1ADE}";
+        assert_eq!(nfc("C\u{1ADE}\u{1AEE}\u{0327}"), expected);
+
+        let result = nfc(expected);
+        assert_eq!(result, expected);
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn is_starter_unicode18() {
+        assert!(is_starter('\u{18E00}')); // Jurchen letter, CCC=0
+        // This new CCC=220 mark is a nonstarter outside the CCC=230 set
+        // pinned by above_exhaustive(). Unicode 17 treats it as a starter.
+        assert!(!is_starter('\u{1AEE}'));
     }
 }

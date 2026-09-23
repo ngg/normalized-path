@@ -36,6 +36,7 @@ DEFAULT_VERSIONS = [
     "15.1.0",
     "16.0.0",
     "17.0.0",
+    "18.0.0",
 ]
 URL = "https://www.unicode.org/Public/{}/ucd/{}"
 CACHE = Path(__file__).parent / "cache"
