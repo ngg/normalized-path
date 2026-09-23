@@ -21,7 +21,7 @@ description = "Opinionated cross-platform, optionally case-insensitive path norm
 repository = "https://github.com/ngg/normalized-path"
 documentation = "https://docs.rs/normalized-path"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 
