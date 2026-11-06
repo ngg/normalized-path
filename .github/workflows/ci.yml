@@ -56,9 +56,6 @@ jobs:
           - name: wasm32-wasip1
             runner: ubuntu-latest
             target: wasm32-wasip1
-          - name: wasm32-wasip1-threads
-            runner: ubuntu-latest
-            target: wasm32-wasip1-threads
           - name: wasm32-wasip2
             runner: ubuntu-latest
             target: wasm32-wasip2
