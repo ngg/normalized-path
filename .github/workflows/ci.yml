@@ -65,7 +65,7 @@ jobs:
       MINIMAL_VERSIONS_ARG: ${{ matrix.minimal_versions && '-Z minimal-versions' || '' }}
       IGNORE_RUST_VERSION_ARG: ${{ matrix.msrv != true && '--ignore-rust-version' || '' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Read MSRV from Cargo.toml
         if: matrix.msrv
         id: msrv
@@ -107,7 +107,7 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
@@ -118,7 +118,7 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
@@ -129,7 +129,7 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
         with:

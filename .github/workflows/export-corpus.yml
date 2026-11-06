@@ -10,14 +10,14 @@ jobs:
   export:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/cache/restore@v5
+      - uses: actions/cache/restore@v6
         with:
           path: fuzz/corpus
           key: fuzz-never-matches
           restore-keys: fuzz-
           enableCrossOsArchive: true
       - run: tar czf corpus.tar.gz -C fuzz corpus
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: fuzz-corpus
           path: corpus.tar.gz
