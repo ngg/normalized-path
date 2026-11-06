@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       runs-on:
-        description: "Runner (e.g. ubuntu-latest, macos-latest, macos-26-intel, windows-latest)"
+        description: "Runner (e.g. ubuntu-latest, ubuntu-26.04-arm, macos-latest, macos-26-intel, windows-latest, windows-11-arm)"
         type: string
         default: ubuntu-latest
       timeout:
@@ -43,6 +43,8 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@nightly
       - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: true
@@ -57,11 +59,11 @@ jobs:
       - run: |
           # Ensure MSVC link.exe is found before Git's /usr/bin/link.exe
           if [ -n "$VCToolsInstallDir" ]; then
-            PATH="$(cygpath -u "$VCToolsInstallDir/bin/Hostx64/x64"):$PATH"
+            PATH="$(cygpath -u "$VCToolsInstallDir/bin/Host$VSCMD_ARG_HOST_ARCH/$VSCMD_ARG_TGT_ARCH"):$PATH"
             export PATH
           fi
           for target in $(cargo fuzz list 2>/dev/null); do
-            cargo fuzz run "$target" -- -max_total_time="$TIMEOUT" -fork="$FORK"
+            cargo fuzz run "$target" --sanitizer "$SANITIZER" -- -max_total_time="$TIMEOUT" -fork="$FORK"
             # TODO: figure out why cmin on one platform loses coverage for the other,
             # even though apple_compatible_from_normalized_cs_fallback should keep parity.
             # cargo fuzz cmin "$target"
@@ -76,6 +78,8 @@ jobs:
         env:
           TIMEOUT: ${{ inputs.timeout }}
           FORK: ${{ inputs.fork }}
+          # Rust does not support AddressSanitizer on Windows ARM64.
+          SANITIZER: ${{ runner.os == 'Windows' && runner.arch == 'ARM64' && 'none' || 'address' }}
       - uses: actions/cache/save@v5
         if: always()
         with:

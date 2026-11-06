@@ -20,7 +20,11 @@ jobs:
             fork: 4
           - runner: windows-latest
             fork: 4
+          - runner: windows-11-arm
+            fork: 4
           - runner: ubuntu-latest
+            fork: 4
+          - runner: ubuntu-26.04-arm
             fork: 4
     uses: ./.github/workflows/fuzz.yml
     with:

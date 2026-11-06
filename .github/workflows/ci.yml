@@ -25,12 +25,16 @@ jobs:
         include:
           - name: linux
             runner: ubuntu-latest
-          - name: macos-arm
+          - name: linux-arm
+            runner: ubuntu-26.04-arm
+          - name: macos
             runner: macos-latest
           - name: macos-intel
             runner: macos-26-intel
           - name: windows
             runner: windows-latest
+          - name: windows-arm
+            runner: windows-11-arm
           - name: msrv
             runner: ubuntu-latest
             msrv: true
@@ -52,6 +56,12 @@ jobs:
           - name: wasm32-wasip1
             runner: ubuntu-latest
             target: wasm32-wasip1
+          - name: wasm32-wasip1-threads
+            runner: ubuntu-latest
+            target: wasm32-wasip1-threads
+          - name: wasm32-wasip2
+            runner: ubuntu-latest
+            target: wasm32-wasip2
     runs-on: ${{ matrix.runner }}
     env:
       TARGET_ARG: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
@@ -88,7 +98,7 @@ jobs:
           if [ "$VERSION" != "$INSTALLED" ]; then
             cargo install -f wasm-bindgen-cli --version "$VERSION"
           fi
-      - if: matrix.target == 'wasm32-wasip1'
+      - if: startsWith(matrix.target, 'wasm32-wasi')
         run: cargo install wasmtime-cli
       - run: cargo build ${{ env.TARGET_ARG }}
       - run: cargo build ${{ env.TARGET_ARG }} --no-default-features
@@ -142,7 +152,11 @@ jobs:
             fork: 4
           - runner: windows-latest
             fork: 4
+          - runner: windows-11-arm
+            fork: 4
           - runner: ubuntu-latest
+            fork: 4
+          - runner: ubuntu-26.04-arm
             fork: 4
     uses: ./.github/workflows/fuzz.yml
     with:
