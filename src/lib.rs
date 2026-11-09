@@ -319,6 +319,10 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(clippy::all, clippy::pedantic)]
 
+#[cfg(all(test, target_arch = "wasm32", target_os = "unknown"))]
+#[macro_use(test)]
+extern crate wasm_bindgen_test;
+
 extern crate alloc;
 
 mod case_sensitivity;

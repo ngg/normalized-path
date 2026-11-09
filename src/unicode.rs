@@ -115,9 +115,6 @@ mod tests {
 
     use alloc::borrow::Cow;
 
-    #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
-    use wasm_bindgen_test::wasm_bindgen_test as test;
-
     use super::CanonicalCombiningClass;
     use super::CodePointMapData;
     use super::case_fold;

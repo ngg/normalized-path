@@ -198,9 +198,6 @@ mod tests {
     use alloc::borrow::Cow;
     use alloc::string::String;
 
-    #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
-    use wasm_bindgen_test::wasm_bindgen_test as test;
-
     use super::fixup_case_fold;
     use super::is_removed_greek_mark;
     use super::map_fullwidth;

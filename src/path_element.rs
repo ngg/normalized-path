@@ -762,9 +762,6 @@ mod tests {
     use alloc::vec;
     use alloc::vec::Vec;
 
-    #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
-    use wasm_bindgen_test::wasm_bindgen_test as test;
-
     use super::PathElement;
     use super::PathElementCI;
     use super::PathElementCS;
@@ -1637,9 +1634,6 @@ mod os_str_tests {
     use std::borrow::Cow;
     use std::ffi::OsStr;
     use std::ffi::OsString;
-
-    #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
-    use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use crate::ErrorKind;
     use crate::case_sensitivity::CaseInsensitive;

@@ -186,9 +186,6 @@ mod tests {
     use alloc::borrow::Cow;
     use alloc::format;
 
-    #[cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))]
-    use wasm_bindgen_test::wasm_bindgen_test as test;
-
     use super::apple_compatible_from_normalized_cs;
     use super::is_reserved_on_windows;
     use super::os_compatible_from_normalized_cs;

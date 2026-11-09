@@ -44,5 +44,5 @@ icu_properties = { workspace = true }
 [target.'cfg(target_vendor = "apple")'.dependencies]
 objc2-core-foundation = { version = "0.3.0", default-features = false, features = ["CFString"] }
 
-[target.'cfg(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none")))'.dev-dependencies]
-wasm-bindgen-test = "0.3.0"
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dev-dependencies]
+wasm-bindgen-test = { package = "wasm-bindgen-test-alias", version = "0.3.0" }
