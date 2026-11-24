@@ -1,6 +1,3 @@
-[target.'cfg(target_arch = "wasm32")']
-rustflags = ["-C", "target-feature=+atomics,+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+exception-handling,+extended-const,+multivalue,+mutable-globals,+nontrapping-fptoint,+reference-types,+sign-ext,+simd128,+tail-call"]
-
 [target.wasm32-unknown-unknown]
 runner = "wasm-bindgen-test-runner"
 
